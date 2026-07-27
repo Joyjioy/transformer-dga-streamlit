@@ -77,6 +77,7 @@ def init_db():
         df_csv['Tanggal_Uji'] = pd.to_datetime(df_csv['Tanggal_Uji']).dt.strftime('%Y-%m-%d')
         df_csv['Status_Pemurnian'] = df_csv['Status_Pemurnian'].fillna('Normal')
         df_csv['Is_Anomali'] = 'No'
+        df_csv = df_csv.replace({np.nan: None})
 
         records = []
         for _, row in df_csv.iterrows():
@@ -269,19 +270,19 @@ def create_hmi_gauge(val, title, min_val, max_val, steps_config):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=val,
-        title={'text': title, 'font': {'family': 'IBM Plex Mono', 'color': '#E5E7EB', 'size': 13}},
-        number={'font': {'family': 'IBM Plex Mono', 'color': '#FFFFFF', 'size': 28}},
+        title={'text': title, 'font': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 13}},
+        number={'font': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 28}},
         gauge={
-            'axis': {'range': [min_val, max_val], 'tickfont': {'family': 'IBM Plex Mono', 'color': '#9CA3AF', 'size': 10}},
-            'bar': {'color': "#D97706"},
-            'bgcolor': "#121926",
-            'bordercolor': "#2A364F",
+            'axis': {'range': [min_val, max_val], 'tickfont': {'family': 'IBM Plex Mono', 'color': '#475569', 'size': 10}},
+            'bar': {'color': "#0F172A", 'thickness': 0.25}, # Jarum warna gelap kontras
+            'bgcolor': "#FFFFFF",
+            'bordercolor': "#CBD5E1",
             'steps': steps_config
         }
     ))
-    fig.update_layout(height=230, paper_bgcolor="#1A2332", margin=dict(l=25, r=25, t=50, b=20))
+    fig.update_layout(height=230, paper_bgcolor="#FFFFFF", margin=dict(l=25, r=25, t=50, b=20))
     return fig
-
+    
 def calculate_prognosis_and_prediction(df_raw):
     if df_raw.empty: return pd.DataFrame()
     df = df_raw.copy()
@@ -358,14 +359,11 @@ def calculate_prognosis_and_prediction(df_raw):
 
     if os.path.exists(JALUR_MODEL_LOKAL):
         model_dga = joblib.load(JALUR_MODEL_LOKAL)
-        vonis_ai_list = []
-        for _, row_rf in df_master.iterrows():
-            gas_vals = [row_rf['H2'], row_rf['CH4'], row_rf['C2H6'], row_rf['C2H4'], row_rf['C2H2']]
-            try:
-                vonis_ai_list.append(model_dga.predict(pd.DataFrame([gas_vals], columns=['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']))[0])
-            except Exception:
-                vonis_ai_list.append('Normal')
-        df_master['Vonis_AI_Mentah'] = vonis_ai_list
+        try:
+            gas_features = df_master[['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']].fillna(0.0)
+            df_master['Vonis_AI_Mentah'] = model_dga.predict(gas_features)
+        except Exception:
+            df_master['Vonis_AI_Mentah'] = 'Normal'
     else:
         df_master['Vonis_AI_Mentah'] = 'Normal'
 
@@ -491,7 +489,7 @@ def calculate_prognosis_and_prediction(df_raw):
                 future_status = df_master.loc[future_idx, 'Status_DGA']
 
                 if pd.notna(future_date) and pd.notna(row_date):
-                    month_diff = int(round((future_date - row_date).days / 30.43))
+                    month_diff = max(1, int(round((future_date - row_date).days / 30.43)))
                     if future_severity > max_severity_passed and future_status not in recorded_status:
                         escalation_list.append((future_status, month_diff))
                         max_severity_passed = future_severity
@@ -540,9 +538,9 @@ with tab_nameplate:
         reg_sn = col_n3.text_input("Serial Number", placeholder="Example: SN-2024-99")
 
         col_n4, col_n5, col_n6 = st.columns(3)
-        reg_year = col_n4.number_input("Year Manufactured", min_value=1950, max_value=2026, value=2010, step=1)
+        reg_year = col_n4.number_input("Year Manufactured", min_value=1950, max_value=2026, value=None, placeholder="1950-2026", step=1)
         reg_model = col_n5.text_input("Model / Type Designation", placeholder="Example: ONAN-TR6")
-        reg_mva = col_n6.number_input("Power Capacity (MVA)", min_value=0.1, value=30.0, step=0.5)
+        reg_mva = col_n6.number_input("Power Capacity (MVA)", min_value=0.1, value=None, placeholder="e.g. 30.0", step=0.5)
 
         col_n7, col_n8, col_n9 = st.columns(3)
         reg_phase = col_n7.selectbox("Number of Phases", [3, 1])
@@ -550,9 +548,9 @@ with tab_nameplate:
         reg_current = col_n9.text_input("Nominal Current (A)", placeholder="Example: 115/866")
 
         col_n10, col_n11, col_n12 = st.columns(3)
-        reg_freq = col_n10.number_input("Frequency (Hz)", min_value=40.0, max_value=70.0, value=50.0, step=1.0)
+        reg_freq = col_n10.number_input("Frequency (Hz)", min_value=40.0, max_value=70.0, value=None, placeholder="e.g. 50.0", step=1.0)
         reg_vector = col_n11.text_input("Vector Group", placeholder="Example: YNd11")
-        reg_impedance = col_n12.number_input("Short Circuit Impedance (%)", min_value=0.1, value=12.5, step=0.1)
+        reg_impedance = col_n12.number_input("Short Circuit Impedance (%)", min_value=0.1, value=None, placeholder="e.g. 12.5", step=0.1)
 
         if st.form_submit_button("REGISTER NAMEPLATE SPECIFICATIONS"):
             if not reg_id:
@@ -560,9 +558,13 @@ with tab_nameplate:
             else:
                 meta_dict = {
                     'ID_Trafo': reg_id, 'Manufacturer': reg_manuf, 'Serial_Number': reg_sn,
-                    'Year_Manufactured': int(reg_year), 'Model_Type': reg_model, 'Capacity_MVA': float(reg_mva),
+                    'Year_Manufactured': int(reg_year) if reg_year else 2010, 
+                    'Model_Type': reg_model, 
+                    'Capacity_MVA': float(reg_mva) if reg_mva else 0.0,
                     'Phase_Count': int(reg_phase), 'Nominal_Voltage_kV': reg_voltage, 'Nominal_Current_A': reg_current,
-                    'Frequency_Hz': float(reg_freq), 'Vector_Group': reg_vector, 'Impedance_Pct': float(reg_impedance)
+                    'Frequency_Hz': float(reg_freq) if reg_freq else 50.0, 
+                    'Vector_Group': reg_vector, 
+                    'Impedance_Pct': float(reg_impedance) if reg_impedance else 0.0
                 }
                 insert_metadata(meta_dict)
                 st.success(f"Nameplate for '{reg_id}' registered successfully.")
@@ -583,51 +585,66 @@ with tab_input:
         with st.form("dga_input_form"):
             st.markdown("**DISSOLVED GAS ANALYSIS (PPM) & O2/N2 RATIO:**")
             c1, c2, c3, c4 = st.columns(4)
-            h2 = c1.number_input("H2 (ppm)", min_value=0.0, value=0.0, step=0.1)
-            ch4 = c2.number_input("CH4 (ppm)", min_value=0.0, value=0.0, step=0.1)
-            c2h6 = c3.number_input("C2H6 (ppm)", min_value=0.0, value=0.0, step=0.1)
-            c2h4 = c4.number_input("C2H4 (ppm)", min_value=0.0, value=0.0, step=0.1)
+            h2 = c1.number_input("H2 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            ch4 = c2.number_input("CH4 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            c2h6 = c3.number_input("C2H6 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            c2h4 = c4.number_input("C2H4 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
 
             c5, c6, c7, c8 = st.columns(4)
-            c2h2 = c5.number_input("C2H2 (ppm)", min_value=0.0, value=0.0, step=0.1)
-            co = c6.number_input("CO (ppm)", min_value=0.0, value=0.0, step=0.1)
-            co2 = c7.number_input("CO2 (ppm)", min_value=0.0, value=0.0, step=0.1)
-            ratio_o2_n2 = c8.number_input("O2/N2 Ratio (ppm/ppm)", min_value=0.0, max_value=1.0, value=0.32, step=0.01)
+            c2h2 = c5.number_input("C2H2 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            co = c6.number_input("CO (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            co2 = c7.number_input("CO2 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            ratio_o2_n2 = c8.number_input("O2/N2 Ratio (ppm/ppm)", min_value=0.0, max_value=1.0, value=None, placeholder="e.g. 0.32", step=0.01)
 
             st.markdown("**EXPANDED OIL ANALYSIS (IEC 60422 PARAMETERS):**")
             o1, o2_col, o3, o4 = st.columns(4)
-            bdv = o1.number_input("BDV (kV)", min_value=0.0, value=50.0, step=0.1)
-            acid = o2_col.number_input("Acid Number (mgKOH/g)", min_value=0.0, value=0.05, step=0.01)
-            water = o3.number_input("Water Content (ppm)", min_value=0.0, value=12.0, step=0.1)
-            ift = o4.number_input("IFT (mN/m)", min_value=0.0, value=30.0, step=0.1)
+            bdv = o1.number_input("BDV (kV)", min_value=0.0, value=None, placeholder="e.g. 50.0", step=0.1)
+            acid = o2_col.number_input("Acid Number (mgKOH/g)", min_value=0.0, value=None, placeholder="e.g. 0.05", step=0.01)
+            water = o3.number_input("Water Content (ppm)", min_value=0.0, value=None, placeholder="e.g. 12.0", step=0.1)
+            ift = o4.number_input("IFT (mN/m)", min_value=0.0, value=None, placeholder="e.g. 30.0", step=0.1)
 
             o5, o6, o7, o8 = st.columns(4)
-            ddf = o5.number_input("DDF / Tan Delta (90°C)", min_value=0.0, value=0.008, step=0.001)
-            resistivity = o6.number_input("Resistivity Gohm.m (20°C)", min_value=0.0, value=70.0, step=1.0)
-            colour_iso = o7.number_input("Oil Colour (ISO 2049 Scale)", min_value=0.5, max_value=8.0, value=1.5, step=0.5)
+            ddf = o5.number_input("DDF / Tan Delta (90°C)", min_value=0.0, value=None, placeholder="e.g. 0.008", step=0.001)
+            resistivity = o6.number_input("Resistivity Gohm.m (20°C)", min_value=0.0, value=None, placeholder="e.g. 70.0", step=1.0)
+            colour_iso = o7.number_input("Oil Colour (ISO 2049 Scale)", min_value=0.5, max_value=8.0, value=None, placeholder="0.5 - 8.0", step=0.5)
             sediment_sludge = o8.selectbox("Sediment / Sludge State", ["No", "Sediment", "Sludge"])
 
             o9, o10, o11, o12 = st.columns(4)
             corrosive_sulfur = o9.selectbox("Corrosive Sulphur", ["Non-Corrosive", "Corrosive"])
             particles_iso = o10.selectbox("Particles ISO 4406", ["Good", "Fair", "Poor"])
-            inhibitor = o11.number_input("Inhibitor Content (%)", min_value=0.0, max_value=100.0, value=80.0, step=1.0)
-            passivator = o12.number_input("Passivator Content (mg/kg)", min_value=0.0, value=100.0, step=1.0)
+            inhibitor = o11.number_input("Inhibitor Content (%)", min_value=0.0, max_value=100.0, value=None, placeholder="0 - 100", step=1.0)
+            passivator = o12.number_input("Passivator Content (mg/kg)", min_value=0.0, value=None, placeholder="e.g. 100.0", step=1.0)
 
             c_f1, c_f2 = st.columns(2)
-            flash_point = c_f1.number_input("Flash Point (°C)", min_value=0.0, value=145.0, step=1.0)
-            pcb_content = c_f2.number_input("PCB Content (mg/kg)", min_value=0.0, value=0.0, step=0.1)
+            flash_point = c_f1.number_input("Flash Point (°C)", min_value=0.0, value=None, placeholder="e.g. 145.0", step=1.0)
+            pcb_content = c_f2.number_input("PCB Content (mg/kg)", min_value=0.0, value=None, placeholder="e.g. 0.0", step=0.1)
 
             if st.form_submit_button("EXECUTE EVALUATION & SAVE RECORD"):
                 input_dict = {
                     'ID_Trafo': trafo_id_input.strip(), 'Tanggal_Uji': test_date,
-                    'H2': h2, 'CH4': ch4, 'C2H6': c2h6, 'C2H4': c2h4, 'C2H2': c2h2,
-                    'CO': co, 'CO2': co2, 'Ratio_O2_N2': ratio_o2_n2,
-                    'BDV': bdv, 'Acid': acid, 'Water': water, 'IFT': ift,
-                    'DDF': ddf, 'Resistivity': resistivity, 'Colour_ISO2049': colour_iso,
-                    'Sediment_Sludge': sediment_sludge, 'Corrosive_Sulphur': corrosive_sulfur,
-                    'Particles_ISO': particles_iso, 'Inhibitor_Content': inhibitor,
-                    'Passivator_Content': passivator, 'Flash_Point': flash_point,
-                    'PCB_Content': pcb_content, 'Status_Pemurnian': purification_status,
+                    'H2': float(h2) if h2 is not None else 0.0, 
+                    'CH4': float(ch4) if ch4 is not None else 0.0, 
+                    'C2H6': float(c2h6) if c2h6 is not None else 0.0, 
+                    'C2H4': float(c2h4) if c2h4 is not None else 0.0, 
+                    'C2H2': float(c2h2) if c2h2 is not None else 0.0,
+                    'CO': float(co) if co is not None else 0.0, 
+                    'CO2': float(co2) if co2 is not None else 0.0, 
+                    'Ratio_O2_N2': float(ratio_o2_n2) if ratio_o2_n2 is not None else 0.32,
+                    'BDV': float(bdv) if bdv is not None else 0.0, 
+                    'Acid': float(acid) if acid is not None else 0.0, 
+                    'Water': float(water) if water is not None else 0.0, 
+                    'IFT': float(ift) if ift is not None else 0.0,
+                    'DDF': float(ddf) if ddf is not None else 0.0, 
+                    'Resistivity': float(resistivity) if resistivity is not None else 0.0, 
+                    'Colour_ISO2049': float(colour_iso) if colour_iso is not None else 1.0,
+                    'Sediment_Sludge': sediment_sludge, 
+                    'Corrosive_Sulphur': corrosive_sulfur,
+                    'Particles_ISO': particles_iso, 
+                    'Inhibitor_Content': float(inhibitor) if inhibitor is not None else 0.0,
+                    'Passivator_Content': float(passivator) if passivator is not None else 0.0, 
+                    'Flash_Point': float(flash_point) if flash_point is not None else 0.0,
+                    'PCB_Content': float(pcb_content) if pcb_content is not None else 0.0, 
+                    'Status_Pemurnian': purification_status,
                     'Is_Anomali': 'No'
                 }
                 has_anomaly, anomaly_reason = check_anomaly(df_all, trafo_id_input.strip(), pd.to_datetime(test_date), input_dict)
@@ -734,10 +751,11 @@ with tab_trend:
             fig_gas.add_vline(x=last_hist_date, line_width=1.5, line_dash="dash", line_color="#D97706")
 
         fig_gas.update_layout(
-            title=dict(text=f"DGA GAS EVOLUTION & FORECAST - {trafo_filter}", font=dict(family="IBM Plex Mono", color="#F3F4F6", size=14)),
-            xaxis_title="TEST DATE", yaxis_title="CONCENTRATION (PPM)", template="plotly_dark",
-            paper_bgcolor="#1A2332", plot_bgcolor="#121926", height=420, margin=dict(l=40, r=40, t=50, b=40)
+            title=dict(text=f"DGA GAS EVOLUTION & FORECAST - {trafo_filter}", font=dict(family="IBM Plex Mono", color="#0F172A", size=14)),
+            xaxis_title="TEST DATE", yaxis_title="CONCENTRATION (PPM)", template="plotly_white",
+            paper_bgcolor="#FFFFFF", plot_bgcolor="#F8FAFC", height=420, margin=dict(l=40, r=40, t=50, b=40)
         )
+
         st.plotly_chart(fig_gas, use_container_width=True)
 
         ui.render_title("CURRENT DGA GAS CONCENTRATIONS (EXCLUDING O2/N2 RATIO)")
@@ -752,19 +770,22 @@ with tab_trend:
         if not df_hist_only.empty:
             last_oa = df_hist_only.iloc[-1]
             
+            # GAUGE ROW 1: BDV, ACID, WATER, IFT
             g1, g2, g3, g4 = st.columns(4)
-            g1.plotly_chart(create_hmi_gauge(float(last_oa.get('BDV', 0)), "BDV (kV) [Min 40]", 0, 100, [{'range': [0, 30], 'color': "#7F1D1D"}, {'range': [30, 40], 'color': "#78350F"}, {'range': [40, 100], 'color': "#064E3B"}]), use_container_width=True)
-            g2.plotly_chart(create_hmi_gauge(float(last_oa.get('Acid', 0)), "Acid (mgKOH/g) [Max 0.15]", 0, 0.5, [{'range': [0, 0.15], 'color': "#064E3B"}, {'range': [0.15, 0.30], 'color': "#78350F"}, {'range': [0.30, 0.5], 'color': "#7F1D1D"}]), use_container_width=True)
-            g3.plotly_chart(create_hmi_gauge(float(last_oa.get('Water', 0)), "Water (ppm) [Max 30]", 0, 60, [{'range': [0, 30], 'color': "#064E3B"}, {'range': [30, 40], 'color': "#78350F"}, {'range': [40, 60], 'color': "#7F1D1D"}]), use_container_width=True)
-            g4.plotly_chart(create_hmi_gauge(float(last_oa.get('IFT', 0)), "IFT (mN/m) [Min 28]", 0, 50, [{'range': [0, 22], 'color': "#7F1D1D"}, {'range': [22, 28], 'color': "#78350F"}, {'range': [28, 50], 'color': "#064E3B"}]), use_container_width=True)
+            g1.plotly_chart(create_hmi_gauge(float(last_oa.get('BDV', 0)), "BDV (kV) [Min 40]", 0, 100, [{'range': [0, 30], 'color': "#DC2626"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 100], 'color': "#16A34A"}]), use_container_width=True)
+            g2.plotly_chart(create_hmi_gauge(float(last_oa.get('Acid', 0)), "Acid (mgKOH/g) [Max 0.15]", 0, 0.5, [{'range': [0, 0.15], 'color': "#16A34A"}, {'range': [0.15, 0.30], 'color': "#D97706"}, {'range': [0.30, 0.5], 'color': "#DC2626"}]), use_container_width=True)
+            g3.plotly_chart(create_hmi_gauge(float(last_oa.get('Water', 0)), "Water (ppm) [Max 30]", 0, 60, [{'range': [0, 30], 'color': "#16A34A"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 60], 'color': "#DC2626"}]), use_container_width=True)
+            g4.plotly_chart(create_hmi_gauge(float(last_oa.get('IFT', 0)), "IFT (mN/m) [Min 28]", 0, 50, [{'range': [0, 22], 'color': "#DC2626"}, {'range': [22, 28], 'color': "#D97706"}, {'range': [28, 50], 'color': "#16A34A"}]), use_container_width=True)
 
+            # GAUGE ROW 2: DDF, RESISTIVITY, COLOUR ISO 2049, INHIBITOR
             g5, g6, g7, g8 = st.columns(4)
-            g5.plotly_chart(create_hmi_gauge(float(last_oa.get('DDF', 0)), "DDF/Tan Delta [Max 0.10]", 0, 0.60, [{'range': [0, 0.10], 'color': "#064E3B"}, {'range': [0.10, 0.50], 'color': "#78350F"}, {'range': [0.50, 0.60], 'color': "#7F1D1D"}]), use_container_width=True)
-            g6.plotly_chart(create_hmi_gauge(float(last_oa.get('Resistivity', 0)), "Resistivity Gohm.m [Min 60]", 0, 100, [{'range': [0, 4], 'color': "#7F1D1D"}, {'range': [4, 60], 'color': "#78350F"}, {'range': [60, 100], 'color': "#064E3B"}]), use_container_width=True)
-            g7.plotly_chart(create_hmi_gauge(float(last_oa.get('Colour_ISO2049', 1.0)), "Colour (ISO 2049) [Max 2.0]", 0.5, 8.0, [{'range': [0.5, 2.0], 'color': "#064E3B"}, {'range': [2.0, 3.5], 'color': "#78350F"}, {'range': [3.5, 8.0], 'color': "#7F1D1D"}]), use_container_width=True)
-            g8.plotly_chart(create_hmi_gauge(float(last_oa.get('Inhibitor_Content', 0)), "Inhibitor Content (%) [Min 60]", 0, 100, [{'range': [0, 40], 'color': "#7F1D1D"}, {'range': [40, 60], 'color': "#78350F"}, {'range': [60, 100], 'color': "#064E3B"}]), use_container_width=True)
+            g5.plotly_chart(create_hmi_gauge(float(last_oa.get('DDF', 0)), "DDF/Tan Delta [Max 0.10]", 0, 0.60, [{'range': [0, 0.10], 'color': "#16A34A"}, {'range': [0.10, 0.50], 'color': "#D97706"}, {'range': [0.50, 0.60], 'color': "#DC2626"}]), use_container_width=True)
+            g6.plotly_chart(create_hmi_gauge(float(last_oa.get('Resistivity', 0)), "Resistivity Gohm.m [Min 60]", 0, 100, [{'range': [0, 4], 'color': "#DC2626"}, {'range': [4, 60], 'color': "#D97706"}, {'range': [60, 100], 'color': "#16A34A"}]), use_container_width=True)
+            g7.plotly_chart(create_hmi_gauge(float(last_oa.get('Colour_ISO2049', 1.0)), "Colour (ISO 2049) [Max 2.0]", 0.5, 8.0, [{'range': [0.5, 2.0], 'color': "#16A34A"}, {'range': [2.0, 3.5], 'color': "#D97706"}, {'range': [3.5, 8.0], 'color': "#DC2626"}]), use_container_width=True)
+            g8.plotly_chart(create_hmi_gauge(float(last_oa.get('Inhibitor_Content', 0)), "Inhibitor Content (%) [Min 60]", 0, 100, [{'range': [0, 40], 'color': "#DC2626"}, {'range': [40, 60], 'color': "#D97706"}, {'range': [60, 100], 'color': "#16A34A"}]), use_container_width=True)
 
+            # GAUGE ROW 3: PASSIVATOR, FLASH POINT, PCB
             g9, g10, g11, _ = st.columns(4)
-            g9.plotly_chart(create_hmi_gauge(float(last_oa.get('Passivator_Content', 0)), "Passivator (mg/kg) [Min 70]", 0, 150, [{'range': [0, 50], 'color': "#7F1D1D"}, {'range': [50, 70], 'color': "#78350F"}, {'range': [70, 150], 'color': "#064E3B"}]), use_container_width=True)
-            g10.plotly_chart(create_hmi_gauge(float(last_oa.get('Flash_Point', 0)), "Flash Point (°C) [Min 135]", 0, 180, [{'range': [0, 120], 'color': "#7F1D1D"}, {'range': [120, 135], 'color': "#78350F"}, {'range': [135, 180], 'color': "#064E3B"}]), use_container_width=True)
-            g11.plotly_chart(create_hmi_gauge(float(last_oa.get('PCB_Content', 0)), "PCB Content (mg/kg) [Max 2.0]", 0, 10, [{'range': [0, 2.0], 'color': "#064E3B"}, {'range': [2.0, 5.0], 'color': "#78350F"}, {'range': [5.0, 10.0], 'color': "#7F1D1D"}]), use_container_width=True)
+            g9.plotly_chart(create_hmi_gauge(float(last_oa.get('Passivator_Content', 0)), "Passivator (mg/kg) [Min 70]", 0, 150, [{'range': [0, 50], 'color': "#DC2626"}, {'range': [50, 70], 'color': "#D97706"}, {'range': [70, 150], 'color': "#16A34A"}]), use_container_width=True)
+            g10.plotly_chart(create_hmi_gauge(float(last_oa.get('Flash_Point', 0)), "Flash Point (°C) [Min 135]", 0, 180, [{'range': [0, 120], 'color': "#DC2626"}, {'range': [120, 135], 'color': "#D97706"}, {'range': [135, 180], 'color': "#16A34A"}]), use_container_width=True)
+            g11.plotly_chart(create_hmi_gauge(float(last_oa.get('PCB_Content', 0)), "PCB Content (mg/kg) [Max 2.0]", 0, 10, [{'range': [0, 2.0], 'color': "#16A34A"}, {'range': [2.0, 5.0], 'color': "#D97706"}, {'range': [5.0, 10.0], 'color': "#DC2626"}]), use_container_width=True)
