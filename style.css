@@ -1,110 +1,149 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
 
+:root {
+    color-scheme: light !important;
+}
+
 * {
     font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    box-sizing: border-box;
 }
 
-.stApp {
-    background-color: #121926;
-    color: #D1D5DB;
+/* Background Utama Aplikasi */
+.stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    background-color: #F8FAFC !important;
+    color: #0F172A !important;
 }
 
-.main { 
-    background-color: #121926; 
+/* Label & Paragraf */
+label, p, span, h1, h2, h3, h4, h5, h6 {
+    color: #0F172A !important;
+    font-weight: 600;
 }
 
-code, pre, .stDataFrame, input, button, select, div[data-baseweb="select"] {
+/* 1. KONTROL SEMUA TOMBOL (Termasuk Form Submit di Transformer Identity) */
+.stButton > button, 
+div[data-testid="stFormSubmitButton"] > button,
+div[data-testid="stDownloadButton"] > button,
+button[kind="primaryFormSubmit"],
+button[kind="secondary"] {
+    background-color: #0F172A !important;
+    border: 1px solid #0F172A !important;
+    border-radius: 2px !important;
+    padding: 10px 16px !important;
+    width: 100% !important;
+}
+
+/* Memaksa Semua Teks di Dalam Tombol Berwarna Putih Terang */
+.stButton > button *, 
+div[data-testid="stFormSubmitButton"] > button *,
+div[data-testid="stDownloadButton"] > button *,
+button[kind="primaryFormSubmit"] *,
+button[kind="secondary"] * {
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
     font-family: 'IBM Plex Mono', monospace !important;
 }
 
-.stButton>button {
-    background-color: #243044;
-    color: #E5E7EB;
-    border-radius: 0px;
-    border: 1px solid #374151;
-    font-weight: 600;
-    font-family: 'IBM Plex Mono', monospace;
-    width: 100%;
-    transition: none;
+.stButton > button:hover, 
+div[data-testid="stFormSubmitButton"] > button:hover,
+div[data-testid="stDownloadButton"] > button:hover {
+    background-color: #1E293B !important;
+    border: 1px solid #1E293B !important;
 }
 
-.stButton>button:hover {
-    background-color: #374151;
-    color: #FFFFFF;
-    border: 1px solid #4B5563;
+/* 2. KONTROL DROPDOWN / SELECTBOX (Background Gelap dengan Font Putih) */
+div[data-baseweb="select"], 
+div[data-baseweb="select"] *,
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] *,
+ul[role="listbox"],
+ul[role="listbox"] li,
+div[data-baseweb="menu"],
+div[data-baseweb="menu"] * {
+    background-color: #0F172A !important;
+    color: #FFFFFF !important;
 }
 
-.sap-header {
-    background-color: #1A2332;
-    padding: 16px 20px;
-    color: #F3F4F6;
-    font-size: 18px;
-    font-weight: 700;
-    font-family: 'IBM Plex Mono', monospace;
-    border-bottom: 3px solid #D97706;
-    border-top: 1px solid #2A364F;
-    border-left: 1px solid #2A364F;
-    border-right: 1px solid #2A364F;
-    margin-bottom: 20px;
+/* Form Input Teks & Angka Biasa */
+input, textarea, div[data-baseweb="input"] input {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    border: 1px solid #CBD5E1 !important;
 }
 
-.sap-title {
-    background-color: #1A2332;
-    padding: 10px 14px;
-    color: #F3F4F6;
-    font-size: 14px;
-    font-weight: 600;
-    font-family: 'IBM Plex Mono', monospace;
-    border-left: 4px solid #0D9488;
-    border-top: 1px solid #2A364F;
-    border-right: 1px solid #2A364F;
-    border-bottom: 1px solid #2A364F;
-    margin-bottom: 16px;
-}
-
-.hmi-table {
-    width: 100%;
-    border-collapse: collapse;
-    background-color: #1A2332;
-    border: 1px solid #2A364F;
-    margin-bottom: 20px;
-    font-family: 'IBM Plex Mono', monospace;
-}
-
-.hmi-table td {
-    padding: 10px 14px;
-    border: 1px solid #2A364F;
-    font-size: 13px;
-}
-
-.hmi-label {
-    color: #9CA3AF;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-size: 11px;
-    width: 30%;
-}
-
-.hmi-value {
-    color: #F3F4F6;
-    font-weight: 600;
-    width: 20%;
-}
-
+/* 3. NAVBAR / TAB NAVIGATION */
 div[data-baseweb="tab-list"] {
-    background-color: #1A2332;
-    border: 1px solid #2A364F;
-    padding: 2px;
+    background-color: #E2E8F0 !important;
+    border: 1px solid #CBD5E1 !important;
+    padding: 4px !important;
+    border-radius: 4px !important;
 }
 
 button[data-baseweb="tab"] {
-    border-radius: 0px !important;
+    border-radius: 2px !important;
     font-family: 'IBM Plex Mono', monospace !important;
-    color: #9CA3AF !important;
+    background-color: transparent !important;
+    padding: 8px 16px !important;
+}
+
+button[data-baseweb="tab"] * {
+    color: #334155 !important;
+    font-weight: 600 !important;
 }
 
 button[aria-selected="true"] {
-    background-color: #243044 !important;
-    color: #F3F4F6 !important;
-    border-bottom: 2px solid #D97706 !important;
+    background-color: #0F172A !important;
+    border-bottom: 3px solid #2563EB !important;
+}
+
+button[aria-selected="true"] * {
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+}
+
+/* 4. TABEL HMI CUSTOM & HEADER */
+.hmi-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #CBD5E1 !important;
+    margin-bottom: 20px !important;
+}
+
+.hmi-table td {
+    padding: 10px 14px !important;
+    border: 1px solid #E2E8F0 !important;
+    background-color: #FFFFFF !important;
+}
+
+.hmi-label {
+    color: #475569 !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+}
+
+.hmi-value {
+    color: #0F172A !important;
+    font-weight: 700 !important;
+}
+
+.sap-header {
+    background-color: #FFFFFF !important;
+    padding: 16px 20px !important;
+    border-bottom: 4px solid #2563EB !important;
+    border-top: 1px solid #E2E8F0 !important;
+    border-left: 1px solid #E2E8F0 !important;
+    border-right: 1px solid #E2E8F0 !important;
+    margin-bottom: 20px !important;
+}
+
+.sap-title {
+    background-color: #F1F5F9 !important;
+    padding: 10px 14px !important;
+    border-left: 4px solid #0D9488 !important;
+    border-top: 1px solid #E2E8F0 !important;
+    border-right: 1px solid #E2E8F0 !important;
+    border-bottom: 1px solid #E2E8F0 !important;
+    margin-bottom: 16px !important;
 }
