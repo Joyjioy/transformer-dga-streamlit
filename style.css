@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
+
+* {
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+}
+
+.stApp {
+    background-color: #121926;
+    color: #D1D5DB;
+}
+
+.main { 
+    background-color: #121926; 
+}
+
+code, pre, .stDataFrame, input, button, select, div[data-baseweb="select"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+
+.stButton>button {
+    background-color: #243044;
+    color: #E5E7EB;
+    border-radius: 0px;
+    border: 1px solid #374151;
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+    width: 100%;
+    transition: none;
+}
+
+.stButton>button:hover {
+    background-color: #374151;
+    color: #FFFFFF;
+    border: 1px solid #4B5563;
+}
+
+.sap-header {
+    background-color: #1A2332;
+    padding: 16px 20px;
+    color: #F3F4F6;
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    border-bottom: 3px solid #D97706;
+    border-top: 1px solid #2A364F;
+    border-left: 1px solid #2A364F;
+    border-right: 1px solid #2A364F;
+    margin-bottom: 20px;
+}
+
+.sap-title {
+    background-color: #1A2332;
+    padding: 10px 14px;
+    color: #F3F4F6;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+    border-left: 4px solid #0D9488;
+    border-top: 1px solid #2A364F;
+    border-right: 1px solid #2A364F;
+    border-bottom: 1px solid #2A364F;
+    margin-bottom: 16px;
+}
+
+.hmi-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #1A2332;
+    border: 1px solid #2A364F;
+    margin-bottom: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.hmi-table td {
+    padding: 10px 14px;
+    border: 1px solid #2A364F;
+    font-size: 13px;
+}
+
+.hmi-label {
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 11px;
+    width: 30%;
+}
+
+.hmi-value {
+    color: #F3F4F6;
+    font-weight: 600;
+    width: 20%;
+}
+
+div[data-baseweb="tab-list"] {
+    background-color: #1A2332;
+    border: 1px solid #2A364F;
+    padding: 2px;
+}
+
+button[data-baseweb="tab"] {
+    border-radius: 0px !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    color: #9CA3AF !important;
+}
+
+button[aria-selected="true"] {
+    background-color: #243044 !important;
+    color: #F3F4F6 !important;
+    border-bottom: 2px solid #D97706 !important;
+}
