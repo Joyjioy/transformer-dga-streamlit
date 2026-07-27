@@ -788,7 +788,7 @@ def calculate_prognosis_and_prediction(df_raw):
 
     return df_master.drop(columns=['Tanggal_Uji_DT', 'Severity_Level', 'Vonis_AI_Mentah'], errors='ignore')
 
-st.markdown("<div class='sap-header'>HMI SUBSTATION MONITORING | TRANSFORMER DIGITAL TWIN SYSTEM</div>", unsafe_allow_html=True)
+st.markdown("<div class='sap-header'>TRANSFORMER SUBSTATION MONITORING SYSTEM</div>", unsafe_allow_html=True)
 
 df_all = load_data()
 df_metadata = load_metadata()
