@@ -79,28 +79,35 @@ def init_db():
         df_csv['Is_Anomali'] = 'No'
         df_csv = df_csv.replace({np.nan: None})
 
-        records = []
         for _, row in df_csv.iterrows():
-            records.append((
-                str(row['ID_Trafo']), str(row['Tanggal_Uji']),
-                float(row.get('H2', 0.0)), float(row.get('CH4', 0.0)), float(row.get('C2H6', 0.0)), float(row.get('C2H4', 0.0)), float(row.get('C2H2', 0.0)),
-                float(row.get('CO', 0.0)), float(row.get('CO2', 0.0)), float(row.get('Ratio_O2_N2', 0.32)),
-                float(row.get('BDV', 50.0)), float(row.get('Acid', 0.05)), float(row.get('Water', 12.0)), float(row.get('IFT', 30.0)),
-                float(row.get('DDF', 0.008)), float(row.get('Resistivity', 70.0)), float(row.get('Colour_ISO2049', 1.5)), str(row.get('Sediment_Sludge', 'No')),
-                str(row.get('Corrosive_Sulphur', 'Non-Corrosive')), str(row.get('Particles_ISO', 'Good')), float(row.get('Inhibitor_Content', 80.0)),
-                float(row.get('Passivator_Content', 100.0)), float(row.get('Flash_Point', 145.0)), float(row.get('PCB_Content', 0.0)),
-                str(row['Status_Pemurnian']), str(row['Is_Anomali'])
-            ))
-
-        cursor.executemany("""
-            INSERT INTO tabel_master (
-                ID_Trafo, Tanggal_Uji, H2, CH4, C2H6, C2H4, C2H2, CO, CO2, Ratio_O2_N2,
-                BDV, Acid, Water, IFT, DDF, Resistivity, Colour_ISO2049, Sediment_Sludge,
-                Corrosive_Sulphur, Particles_ISO, Inhibitor_Content, Passivator_Content,
-                Flash_Point, PCB_Content, Status_Pemurnian, Is_Anomali
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, records)
-        conn.commit()
+            data_dict = {
+                'ID_Trafo': str(row['ID_Trafo']), 'Tanggal_Uji': str(row['Tanggal_Uji']),
+                'H2': float(row['H2']) if pd.notna(row.get('H2')) else None,
+                'CH4': float(row['CH4']) if pd.notna(row.get('CH4')) else None,
+                'C2H6': float(row['C2H6']) if pd.notna(row.get('C2H6')) else None,
+                'C2H4': float(row['C2H4']) if pd.notna(row.get('C2H4')) else None,
+                'C2H2': float(row['C2H2']) if pd.notna(row.get('C2H2')) else None,
+                'CO': float(row['CO']) if pd.notna(row.get('CO')) else None,
+                'CO2': float(row['CO2']) if pd.notna(row.get('CO2')) else None,
+                'Ratio_O2_N2': float(row['Ratio_O2_N2']) if pd.notna(row.get('Ratio_O2_N2')) else None,
+                'BDV': float(row['BDV']) if pd.notna(row.get('BDV')) else None,
+                'Acid': float(row['Acid']) if pd.notna(row.get('Acid')) else None,
+                'Water': float(row['Water']) if pd.notna(row.get('Water')) else None,
+                'IFT': float(row['IFT']) if pd.notna(row.get('IFT')) else None,
+                'DDF': float(row['DDF']) if pd.notna(row.get('DDF')) else None,
+                'Resistivity': float(row['Resistivity']) if pd.notna(row.get('Resistivity')) else None,
+                'Colour_ISO2049': float(row['Colour_ISO2049']) if pd.notna(row.get('Colour_ISO2049')) else None,
+                'Sediment_Sludge': str(row.get('Sediment_Sludge')) if pd.notna(row.get('Sediment_Sludge')) else None,
+                'Corrosive_Sulphur': str(row.get('Corrosive_Sulphur')) if pd.notna(row.get('Corrosive_Sulphur')) else None,
+                'Particles_ISO': str(row.get('Particles_ISO')) if pd.notna(row.get('Particles_ISO')) else None,
+                'Inhibitor_Content': float(row['Inhibitor_Content']) if pd.notna(row.get('Inhibitor_Content')) else None,
+                'Passivator_Content': float(row['Passivator_Content']) if pd.notna(row.get('Passivator_Content')) else None,
+                'Flash_Point': float(row['Flash_Point']) if pd.notna(row.get('Flash_Point')) else None,
+                'PCB_Content': float(row['PCB_Content']) if pd.notna(row.get('PCB_Content')) else None,
+                'Status_Pemurnian': str(row['Status_Pemurnian']),
+                'Is_Anomali': str(row['Is_Anomali'])
+            }
+            insert_data(data_dict)
 
     conn.close()
 
@@ -108,8 +115,8 @@ def load_data():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM tabel_master ORDER BY Tanggal_Uji ASC", conn)
     conn.close()
-    if not df.empty and 'Tanggal_Uji' in df.columns:
-        df['Tanggal_Uji_DT'] = pd.to_datetime(df['Tanggal_Uji'])
+    # Pembentukan kolom Tanggal_Uji_DT tanpa syarat keberadaan baris
+    df['Tanggal_Uji_DT'] = pd.to_datetime(df.get('Tanggal_Uji', pd.Series(dtype='str')), errors='coerce')
     return df
 
 def load_metadata():
@@ -130,14 +137,21 @@ def insert_metadata(meta_dict):
 def insert_data(data_dict):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO tabel_master (
-            ID_Trafo, Tanggal_Uji, H2, CH4, C2H6, C2H4, C2H2, CO, CO2, Ratio_O2_N2,
-            BDV, Acid, Water, IFT, DDF, Resistivity, Colour_ISO2049, Sediment_Sludge,
-            Corrosive_Sulphur, Particles_ISO, Inhibitor_Content, Passivator_Content,
-            Flash_Point, PCB_Content, Status_Pemurnian, Is_Anomali
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, tuple(data_dict.values()))
+
+    kolom_urutan = [
+        'ID_Trafo', 'Tanggal_Uji', 'H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2', 'Ratio_O2_N2',
+        'BDV', 'Acid', 'Water', 'IFT', 'DDF', 'Resistivity', 'Colour_ISO2049',
+        'Sediment_Sludge', 'Corrosive_Sulphur', 'Particles_ISO',
+        'Inhibitor_Content', 'Passivator_Content', 'Flash_Point', 'PCB_Content',
+        'Status_Pemurnian', 'Is_Anomali'
+    ]
+
+    nilai_terurut = tuple(data_dict.get(k) for k in kolom_urutan)
+
+    cursor.execute(f"""
+        INSERT INTO tabel_master ({', '.join(kolom_urutan)})
+        VALUES ({', '.join(['?'] * len(kolom_urutan))})
+    """, nilai_terurut)
     conn.commit()
     conn.close()
 
@@ -151,59 +165,78 @@ def delete_data(record_id):
 init_db()
 
 def check_anomaly(df_history, trafo_id, input_date, input_data):
-    df_trafo = df_history[df_history['ID_Trafo'] == trafo_id].sort_values('Tanggal_Uji_DT')
-    is_purification_valid = input_data['Status_Pemurnian'] in ["Reconditioning", "Reclaiming", "Oil Replacement", "Ganti Minyak"]
+    if df_history.empty:
+        df_trafo = pd.DataFrame()
+    else:
+        df_trafo = df_history[df_history['ID_Trafo'] == trafo_id].sort_values('Tanggal_Uji_DT')
+
+    is_purification_valid = input_data.get('Status_Pemurnian') in ["Reconditioning", "Reclaiming", "Oil Replacement"]
     is_new_trafo = df_trafo.empty
-    
+
+    def get_num(key):
+        val = input_data.get(key)
+        return float(val) if val is not None and pd.notna(val) else 0.0
+
+    val_h2 = get_num('H2')
+    val_ch4 = get_num('CH4')
+    val_c2h6 = get_num('C2H6')
+    val_c2h4 = get_num('C2H4')
+    val_c2h2 = get_num('C2H2')
+    val_bdv = get_num('BDV')
+    val_water = get_num('Water')
+    val_acid = get_num('Acid')
+    val_colour = get_num('Colour_ISO2049')
+
     exceeded = []
-    if input_data['H2'] > 5000: exceeded.append(f"H2: {input_data['H2']} ppm")
-    if input_data['CH4'] > 3000: exceeded.append(f"CH4: {input_data['CH4']} ppm")
-    if input_data['C2H4'] > 2000: exceeded.append(f"C2H4: {input_data['C2H4']} ppm")
-    if input_data['C2H6'] > 1000: exceeded.append(f"C2H6: {input_data['C2H6']} ppm")
-    if input_data['C2H2'] > 500: exceeded.append(f"C2H2: {input_data['C2H2']} ppm")
-    if input_data['BDV'] > 100: exceeded.append(f"BDV: {input_data['BDV']} kV")
-    if input_data['Water'] > 100: exceeded.append(f"Water: {input_data['Water']} ppm")
-    if input_data['Acid'] > 1.0: exceeded.append(f"Acid: {input_data['Acid']} mgKOH/g")
-    if input_data['Colour_ISO2049'] > 8.0: exceeded.append(f"Colour: {input_data['Colour_ISO2049']} ISO 2049")
-    
+    if val_h2 > 5000: exceeded.append(f"H2: {val_h2} ppm")
+    if val_ch4 > 3000: exceeded.append(f"CH4: {val_ch4} ppm")
+    if val_c2h4 > 2000: exceeded.append(f"C2H4: {val_c2h4} ppm")
+    if val_c2h6 > 1000: exceeded.append(f"C2H6: {val_c2h6} ppm")
+    if val_c2h2 > 500: exceeded.append(f"C2H2: {val_c2h2} ppm")
+    if val_bdv > 100: exceeded.append(f"BDV: {val_bdv} kV")
+    if val_water > 100: exceeded.append(f"Water: {val_water} ppm")
+    if val_acid > 1.0: exceeded.append(f"Acid: {val_acid} mgKOH/g")
+    if val_colour > 8.0: exceeded.append(f"Colour: {val_colour} ISO 2049")
+
     if exceeded:
         return True, "Parameter values exceed physical laboratory thresholds:\n- " + "\n- ".join(exceeded)
-    
-    if input_data['C2H2'] > 0 and (input_data['H2'] == 0 or input_data['CH4'] == 0):
+
+    if val_c2h2 > 0 and (val_h2 == 0 or val_ch4 == 0):
         return True, "DGA Physical Inconsistency: C2H2 detected without base gas H2 or CH4 generation."
-    
+
     if is_purification_valid:
-        if (input_data['H2'] > 50 or input_data['CH4'] > 50 or input_data['C2H4'] > 30 or input_data['C2H2'] > 2):
-            return True, f"Gas concentrations are abnormally high for a post-purification condition ({input_data['Status_Pemurnian']})."
+        if (val_h2 > 50 or val_ch4 > 50 or val_c2h4 > 30 or val_c2h2 > 2):
+            return True, f"Gas concentrations are abnormally high for a post-purification condition ({input_data.get('Status_Pemurnian')})."
         return False, "Normal"
-        
+
     if is_new_trafo:
-        if (input_data['H2'] > 150 or input_data['CH4'] > 120 or input_data['C2H6'] > 65 or input_data['C2H4'] > 50 or input_data['C2H2'] > 2):
+        if (val_h2 > 150 or val_ch4 > 120 or val_c2h6 > 65 or val_c2h4 > 50 or val_c2h2 > 2):
             return True, "Initial gas values for new transformer exceed IEEE baseline limits."
         return False, "Normal"
 
-    rec_last = df_trafo.iloc[-1]
-    last_date = rec_last['Tanggal_Uji_DT']
-    days_diff = (input_date - last_date).days
-    
-    last_h2 = rec_last['H2'] if pd.notnull(rec_last['H2']) else 0
-    last_ch4 = rec_last['CH4'] if pd.notnull(rec_last['CH4']) else 0
-    
-    if days_diff > 0:
-        rate_h2 = ((input_data['H2'] - last_h2) / days_diff) * 30.43
-        rate_ch4 = ((input_data['CH4'] - last_ch4) / days_diff) * 30.43
-        
-        rate_details = []
-        if rate_h2 > 15: rate_details.append(f"H2 Rate: {rate_h2:.1f} ppm/month")
-        if rate_ch4 > 12: rate_details.append(f"CH4 Rate: {rate_ch4:.1f} ppm/month")
-        if rate_details:
-            return True, "Monthly Gas Growth Rate exceeds acceptable thresholds:\n- " + "\n- ".join(rate_details)
+    if not df_trafo.empty:
+        rec_last = df_trafo.iloc[-1]
+        last_date = rec_last['Tanggal_Uji_DT']
+        days_diff = (input_date - last_date).days
+
+        last_h2 = rec_last['H2'] if pd.notnull(rec_last['H2']) else 0.0
+        last_ch4 = rec_last['CH4'] if pd.notnull(rec_last['CH4']) else 0.0
+
+        if days_diff > 0:
+            rate_h2 = ((val_h2 - last_h2) / days_diff) * 30.43
+            rate_ch4 = ((val_ch4 - last_ch4) / days_diff) * 30.43
+
+            rate_details = []
+            if rate_h2 > 15: rate_details.append(f"H2 Rate: {rate_h2:.1f} ppm/month")
+            if rate_ch4 > 12: rate_details.append(f"CH4 Rate: {rate_ch4:.1f} ppm/month")
+            if rate_details:
+                return True, "Monthly Gas Growth Rate exceeds acceptable thresholds:\n- " + "\n- ".join(rate_details)
 
     return False, "Normal"
 
 def get_ieee_thresholds(o2_n2_ratio, age_years, period_months=12):
     is_sealed = (o2_n2_ratio is not None and o2_n2_ratio <= 0.2)
-    
+
     if age_years is None or age_years <= 0: age_cat = 'unknown'
     elif 1 <= age_years <= 9: age_cat = '1_9'
     elif 10 <= age_years <= 30: age_cat = '10_30'
@@ -274,7 +307,7 @@ def create_hmi_gauge(val, title, min_val, max_val, steps_config):
         number={'font': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 28}},
         gauge={
             'axis': {'range': [min_val, max_val], 'tickfont': {'family': 'IBM Plex Mono', 'color': '#475569', 'size': 10}},
-            'bar': {'color': "#0F172A", 'thickness': 0.25}, # Jarum warna gelap kontras
+            'bar': {'color': "#0F172A", 'thickness': 0.25},
             'bgcolor': "#FFFFFF",
             'bordercolor': "#CBD5E1",
             'steps': steps_config
@@ -282,19 +315,115 @@ def create_hmi_gauge(val, title, min_val, max_val, steps_config):
     ))
     fig.update_layout(height=230, paper_bgcolor="#FFFFFF", margin=dict(l=25, r=25, t=50, b=20))
     return fig
-    
+
+def plot_duval_triangle1(ch4, c2h4, c2h2, trafo_id):
+    total = ch4 + c2h4 + c2h2
+    if total == 0:
+        p_ch4, p_c2h4, p_c2h2 = 0.0, 0.0, 0.0
+    else:
+        p_ch4 = (ch4 / total) * 100
+        p_c2h4 = (c2h4 / total) * 100
+        p_c2h2 = (c2h2 / total) * 100
+
+    fig = go.Figure()
+
+    zones = [
+        {'name': 'PD', 'a': [100, 98, 98, 100], 'b': [0, 2, 0, 0], 'c': [0, 0, 2, 0],
+         'color': 'rgba(147, 197, 253, 0.4)', 'text_pos': (99.0, 0.5, 0.5)},
+        {'name': 'T1', 'a': [98, 98, 80, 76, 96, 98], 'b': [2, 0, 0, 4, 4, 2], 'c': [0, 2, 20, 20, 0, 0],
+         'color': 'rgba(254, 240, 138, 0.4)', 'text_pos': (88.0, 1.5, 10.5)},
+        {'name': 'T2', 'a': [80, 50, 46, 76, 80], 'b': [0, 0, 4, 4, 0], 'c': [20, 50, 50, 20, 20],
+         'color': 'rgba(253, 186, 116, 0.4)', 'text_pos': (63.0, 2.0, 35.0)},
+        {'name': 'T3', 'a': [50, 0, 0, 35, 50], 'b': [0, 0, 15, 15, 0], 'c': [50, 100, 85, 50, 50],
+         'color': 'rgba(248, 113, 113, 0.4)', 'text_pos': (20.0, 5.0, 75.0)},
+        {'name': 'D1', 'a': [0, 96, 73, 0, 0], 'b': [100, 4, 4, 77, 100], 'c': [0, 0, 23, 23, 0],
+         'color': 'rgba(192, 132, 252, 0.4)', 'text_pos': (30.0, 60.0, 10.0)},
+        {'name': 'D2', 'a': [0, 73, 56, 31, 0, 0], 'b': [77, 4, 4, 29, 29, 77], 'c': [23, 23, 40, 40, 71, 23],
+         'color': 'rgba(244, 63, 94, 0.5)', 'text_pos': (20.0, 45.0, 35.0)},
+        {'name': 'DT', 'a': [73, 46, 35, 0, 0, 31, 56, 73], 'b': [4, 4, 15, 15, 29, 29, 4, 4],
+         'c': [23, 50, 50, 85, 71, 40, 40, 23], 'color': 'rgba(203, 213, 225, 0.5)', 'text_pos': (40.0, 15.0, 45.0)}
+    ]
+
+    for z in zones:
+        fig.add_trace(go.Scatterternary({
+            'mode': 'lines', 'a': z['a'], 'b': z['b'], 'c': z['c'],
+            'fill': 'toself', 'fillcolor': z['color'], 'line': {'color': '#334155', 'width': 1},
+            'name': z['name'], 'hoverinfo': 'name', 'showlegend': True
+        }))
+        tp = z['text_pos']
+        fig.add_trace(go.Scatterternary({
+            'mode': 'text', 'a': [tp[0]], 'b': [tp[1]], 'c': [tp[2]],
+            'text': [f"<b>{z['name']}</b>"],
+            'textfont': {'size': 12, 'color': '#0F172A', 'family': 'IBM Plex Mono'},
+            'showlegend': False, 'hoverinfo': 'none'
+        }))
+
+    fig.add_trace(go.Scatterternary({
+        'mode': 'markers+text', 'a': [p_ch4], 'b': [p_c2h2], 'c': [p_c2h4],
+        'text': [f"<b>{trafo_id}</b>"], 'textposition': "top center",
+        'textfont': {'size': 12, 'color': '#000000', 'family': 'IBM Plex Mono'},
+        'marker': {'symbol': 'diamond', 'color': '#FFFF00', 'size': 16, 'line': {'width': 2.5, 'color': '#000000'}},
+        'name': 'Observasi Saat Ini', 'hoverinfo': 'text'
+    }))
+
+    fig.update_layout({
+        'ternary': {
+            'sum': 100,
+            'aaxis': {'title': {'text': '% CH4', 'font': {'color': '#0F172A', 'size': 13}}, 'min': 0, 'linewidth': 2, 'ticks': 'outside'},
+            'baxis': {'title': {'text': '% C2H2', 'font': {'color': '#0F172A', 'size': 13}}, 'min': 0, 'linewidth': 2, 'ticks': 'outside'},
+            'caxis': {'title': {'text': '% C2H4', 'font': {'color': '#0F172A', 'size': 13}}, 'min': 0, 'linewidth': 2, 'ticks': 'outside'},
+            'bgcolor': '#FFFFFF'
+        },
+        'paper_bgcolor': '#FFFFFF',
+        'title': dict(text=f"DUVAL TRIANGLE 1 FAULT GEOMETRY MAP — {trafo_id}", font=dict(family="IBM Plex Mono", color="#0F172A", size=14)),
+        'height': 600, 'margin': dict(l=40, r=40, t=50, b=40),
+        'legend': dict(orientation="h", y=-0.1, x=0.05)
+    })
+
+    return fig, p_ch4, p_c2h4, p_c2h2
+
 def calculate_prognosis_and_prediction(df_raw):
     if df_raw.empty: return pd.DataFrame()
     df = df_raw.copy()
     df_meta = load_metadata()
-    
+
+    # Validasi keberadaan kolom Status_Pemurnian
+    if 'Status_Pemurnian' not in df.columns:
+        df['Status_Pemurnian'] = 'Normal'
+
+    df['Tanggal_Uji_DT'] = pd.to_datetime(df['Tanggal_Uji'], errors='coerce')
+    df = df.sort_values(['ID_Trafo', 'Tanggal_Uji_DT']).reset_index(drop=True)
+
     numeric_columns = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2', 'Ratio_O2_N2', 'BDV', 'Acid', 'Water', 'IFT', 'DDF', 'Resistivity', 'Colour_ISO2049', 'Inhibitor_Content', 'Passivator_Content', 'Flash_Point', 'PCB_Content']
+    categorical_columns = ['Sediment_Sludge', 'Corrosive_Sulphur', 'Particles_ISO']
+
     for col in numeric_columns:
         if col in df.columns:
             df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    df['Tanggal_Uji_DT'] = pd.to_datetime(df['Tanggal_Uji'], errors='coerce')
+    gas_cols = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2']
+
+    # Penanganan Vektor Presisi & Pemisahan Era Pemurnian
+    is_purify_row = df['Status_Pemurnian'].fillna('').astype(str).str.strip().isin(['Oil Replacement', 'Reclaiming', 'Reconditioning'])
+
+    for col in gas_cols:
+        if col in df.columns:
+            df.loc[is_purify_row & df[col].isna(), col] = 0.0
+
+    df['Is_Purification_Event'] = is_purify_row.astype(int)
+    df['Era_Pemurnian'] = df.groupby('ID_Trafo')['Is_Purification_Event'].cumsum()
+
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = df.groupby(['ID_Trafo', 'Era_Pemurnian'])[col].ffill()
+
+    for col in categorical_columns:
+        if col in df.columns:
+            df[col] = df.groupby(['ID_Trafo', 'Era_Pemurnian'])[col].ffill()
+
+    df = df.drop(columns=['Is_Purification_Event', 'Era_Pemurnian'], errors='ignore')
+
     forecast_columns = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']
     all_7_gases = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2']
     prediction_steps = 6
@@ -311,8 +440,8 @@ def calculate_prognosis_and_prediction(df_raw):
         two_years_ago = last_time_dt - relativedelta(years=2)
         df_temporal = df_trafo[df_trafo['Tanggal_Uji_DT'] >= two_years_ago].copy()
 
-        purification_idx = df_temporal[df_temporal['Status_Pemurnian'].isin(['Oil Replacement', 'Reclaiming', 'Reconditioning', 'Ganti Minyak'])].index
-        
+        purification_idx = df_temporal[df_temporal['Status_Pemurnian'].isin(['Oil Replacement', 'Reclaiming', 'Reconditioning'])].index
+
         freeze_mode = False
         if not purification_idx.empty:
             last_p_date = df_temporal.loc[purification_idx[-1], 'Tanggal_Uji_DT']
@@ -329,7 +458,9 @@ def calculate_prognosis_and_prediction(df_raw):
         prediction_dates = [(last_time_dt + relativedelta(months=i+1)).strftime('%Y-%m-%d') for i in range(prediction_steps)]
 
         for col in forecast_columns:
-            time_series = data_train_arima[col].values
+            ts_series = data_train_arima[col].ffill().bfill()
+            time_series = ts_series.values if not ts_series.empty else np.array([0.0])
+
             if freeze_mode or len(time_series) < 3:
                 forecast = [time_series[-1] if len(time_series) > 0 else 0.0 for _ in range(prediction_steps)]
             else:
@@ -339,7 +470,7 @@ def calculate_prognosis_and_prediction(df_raw):
                 except:
                     avg_diff = np.mean(np.diff(time_series[-3:])) if len(time_series) > 1 else 0
                     forecast = [time_series[-1] + (avg_diff * (i+1)) for i in range(prediction_steps)]
-            
+
             future_predictions[col] = np.maximum(forecast, time_series[-1] if len(time_series) > 0 else 0.0)
 
         df_trafo_prediction_list = []
@@ -360,7 +491,7 @@ def calculate_prognosis_and_prediction(df_raw):
     if os.path.exists(JALUR_MODEL_LOKAL):
         model_dga = joblib.load(JALUR_MODEL_LOKAL)
         try:
-            gas_features = df_master[['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']].fillna(0.0)
+            gas_features = df_master[['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']].ffill().bfill().fillna(0.0)
             df_master['Vonis_AI_Mentah'] = model_dga.predict(gas_features)
         except Exception:
             df_master['Vonis_AI_Mentah'] = 'Normal'
@@ -373,12 +504,16 @@ def calculate_prognosis_and_prediction(df_raw):
     df_master['Tanggal_Uji_DT'] = pd.to_datetime(df_master['Tanggal_Uji'], errors='coerce')
     df_master = df_master.sort_values(['ID_Trafo', 'Tanggal_Uji_DT']).reset_index(drop=True)
 
+    trafo_freeze_status = {}
+
     for idx, row in df_master.iterrows():
         trafo_id = row['ID_Trafo']
         meta_match = df_meta[df_meta['ID_Trafo'] == trafo_id]
         calculated_age = (row['Tanggal_Uji_DT'].year - meta_match.iloc[0]['Year_Manufactured']) if not meta_match.empty else None
 
         o2_n2_ratio = row.get('Ratio_O2_N2', 0.32)
+        if pd.isna(o2_n2_ratio): o2_n2_ratio = 0.32
+
         t1_limits, t2_limits, t3_delta_limits, t4_rate_limits = get_ieee_thresholds(o2_n2_ratio, calculated_age)
 
         exceed_t1_any = any((pd.notna(row[g]) and row[g] > t1_limits[g]) for g in all_7_gases if g in row)
@@ -389,25 +524,38 @@ def calculate_prognosis_and_prediction(df_raw):
             days_diff = (row['Tanggal_Uji_DT'] - df_master.loc[idx-1, 'Tanggal_Uji_DT']).days
             if days_diff > 0:
                 for g in all_7_gases:
-                    diff_ppm = row[g] - df_master.loc[idx-1, g]
-                    annual_rate = (diff_ppm / max(days_diff, 3)) * 365.25
-                    if (g == 'C2H2' and diff_ppm >= 0.5) or (g != 'C2H2' and diff_ppm > t3_delta_limits[g]) or (annual_rate > t4_rate_limits[g]):
-                        is_rates_anomali = True
+                    if pd.notna(row[g]) and pd.notna(df_master.loc[idx-1, g]):
+                        diff_ppm = row[g] - df_master.loc[idx-1, g]
+                        annual_rate = (diff_ppm / max(days_diff, 3)) * 365.25
+                        if (g == 'C2H2' and diff_ppm >= 0.5) or (g != 'C2H2' and diff_ppm > t3_delta_limits[g]) or (annual_rate > t4_rate_limits[g]):
+                            is_rates_anomali = True
 
         vonis_ai = row['Vonis_AI_Mentah']
         if not exceed_t1_any and not is_rates_anomali and not exceed_t2_any:
             status_ieee, status_dga_final = "Status 1", "Normal"
         elif exceed_t2_any or is_rates_anomali:
             status_ieee = "Status 3"
-            vonis_fisika_pasti = get_duval_minimum(row['CH4'], row['C2H4'], row['C2H2'])
-            status_dga_final = vonis_fisika_pasti if (row['C2H2'] == 0 and vonis_ai in ['D1', 'D2']) else vonis_ai
+            c_ch4 = row['CH4'] if pd.notna(row['CH4']) else 0.0
+            c_c2h4 = row['C2H4'] if pd.notna(row['C2H4']) else 0.0
+            c_c2h2 = row['C2H2'] if pd.notna(row['C2H2']) else 0.0
+            vonis_fisika_pasti = get_duval_minimum(c_ch4, c_c2h4, c_c2h2)
+
+            if c_c2h2 == 0 and vonis_ai in ['D1', 'D2']:
+                status_dga_final = vonis_fisika_pasti
+            elif vonis_fisika_pasti == "T3" and vonis_ai in ['T1', 'T2', 'Normal', 'Caution']:
+                status_dga_final = "T3"
+            elif vonis_ai in ['Normal', 'Caution']:
+                status_dga_final = vonis_fisika_pasti
+            else:
+                status_dga_final = vonis_ai
         else:
             status_ieee, status_dga_final = "Status 2", "Caution"
 
         dga_status_ieee_list.append(status_ieee)
         status_dga_final_list.append(status_dga_final)
 
-        co, co2 = row.get('CO', 0), row.get('CO2', 0)
+        co = row['CO'] if pd.notna(row['CO']) else 0.0
+        co2 = row['CO2'] if pd.notna(row['CO2']) else 0.0
         ratio_co2_co = co2 / (co + 1e-5)
         if co > 1000 and ratio_co2_co < 3:
             status_paper_list.append("Indication of Fault Involving Solid Paper Insulation" if (exceed_t1_any or is_rates_anomali) else "Oil Oxidation (Restricted O2)")
@@ -416,47 +564,83 @@ def calculate_prognosis_and_prediction(df_raw):
         else:
             status_paper_list.append("Normal")
 
-        # EVALUASI OA CATEGORY C (< 72.5 kV)
-        bdv, acid, water = float(row.get('BDV', 0)), float(row.get('Acid', 0)), float(row.get('Water', 0))
-        ift, ddf, resistivity = float(row.get('IFT', 0)), float(row.get('DDF', 0)), float(row.get('Resistivity', 0))
-        colour = float(row.get('Colour_ISO2049', 1.0))
-        sediment_sludge, corrosive_sulfur = str(row.get('Sediment_Sludge')).strip(), str(row.get('Corrosive_Sulphur')).strip()
+        status_p_str = str(row.get('Status_Pemurnian', '')).strip()
+        if status_p_str in ['Oil Replacement', 'Reclaiming', 'Reconditioning']:
+            trafo_freeze_status[trafo_id] = row['Tanggal_Uji_DT']
 
-        reasons = []
-        if acid > 0.30: reasons.append(f"Acid Number critical ({acid:.2f} mgKOH/g > 0.30 Limit)")
-        if 0 < ift < 22: reasons.append(f"Interfacial Tension critical ({ift:.1f} mN/m < 22 Limit)")
-        if colour >= 4.0: reasons.append(f"Colour Scale critical ({colour:.1f} ISO 2049 >= 4.0 Limit)")
-        if acid > 0.20 and ddf > 0.50 and 0 < resistivity < 4: reasons.append("Severe Combined Aging Detected")
+        is_currently_frozen = False
+        if trafo_id in trafo_freeze_status:
+            tgl_p = trafo_freeze_status[trafo_id]
+            umb = (row['Tanggal_Uji_DT'].year - tgl_p.year) * 12 + (row['Tanggal_Uji_DT'].month - tgl_p.month)
+            sub_df = df_master[
+                (df_master['ID_Trafo'] == trafo_id) &
+                (df_master['Tanggal_Uji_DT'] >= tgl_p) &
+                (df_master['Tanggal_Uji_DT'] <= row['Tanggal_Uji_DT']) &
+                (df_master['Tipe_Data'] == 'Historis')
+            ]
+            if len(sub_df) < 6 or umb < 4:
+                is_currently_frozen = True
 
-        if reasons:
-            rec_oa = "OA RECOMMENDATION: MANDATORY TOTAL OIL REPLACEMENT (IEC 60422)"
-            reason_str = " | ".join(reasons) + " -> Full Oil Replacement Required."
-        elif corrosive_sulfur == "Corrosive":
-            rec_oa = "OA RECOMMENDATION: PASSIVATION OR RECLAIMING REQUIRED (IEC 60422)"
-            reason_str = "Corrosive Sulphur detected -> Risk of copper sulfide deposition."
+        bdv = float(row['BDV']) if pd.notna(row['BDV']) else None
+        acid = float(row['Acid']) if pd.notna(row['Acid']) else None
+        water = float(row['Water']) if pd.notna(row['Water']) else None
+        ift = float(row['IFT']) if pd.notna(row['IFT']) else None
+        ddf = float(row['DDF']) if pd.notna(row['DDF']) else None
+        resistivity = float(row['Resistivity']) if pd.notna(row['Resistivity']) else None
+        colour = float(row['Colour_ISO2049']) if pd.notna(row['Colour_ISO2049']) else None
+        sediment_sludge = str(row.get('Sediment_Sludge')).strip() if pd.notna(row.get('Sediment_Sludge')) else ""
+        corrosive_sulfur = str(row.get('Corrosive_Sulphur')).strip() if pd.notna(row.get('Corrosive_Sulphur')) else ""
+
+        if is_currently_frozen:
+            rec_oa = "OA STATUS: FREEZE MODE ACTIVE (MONITORING ERA BARU)"
+            reason_str = "New oil baseline detected. System under intensive post-maintenance monitoring."
+        elif all(v is None for v in [bdv, acid, water, ift]):
+            rec_oa = "OA STATUS: DATA NOT TESTED (N/A)"
+            reason_str = "Insufficient oil physical parameters recorded for Category C evaluation."
         else:
-            reclaim_reasons = []
-            if acid >= 0.15: reclaim_reasons.append(f"Acid elevated ({acid:.2f} mgKOH/g >= 0.15 Limit)")
-            if 22 <= ift <= 28: reclaim_reasons.append(f"IFT degraded ({ift:.1f} mN/m)")
-            if ddf > 0.10: reclaim_reasons.append(f"DDF/Tan Delta high ({ddf:.3f} > 0.10 Limit)")
-            if 0 < resistivity < 60: reclaim_reasons.append(f"Resistivity low ({resistivity:.1f} Gohm.m < 60 Limit)")
-            if colour > 2.0: reclaim_reasons.append(f"Oil Colour degraded ({colour:.1f} ISO 2049 > 2.0 Limit)")
-            if sediment_sludge == "Sludge": reclaim_reasons.append("Precipitable Sludge detected")
+            bdv_v = bdv if bdv is not None else 0.0
+            acid_v = acid if acid is not None else 0.0
+            water_v = water if water is not None else 0.0
+            ift_v = ift if ift is not None else 0.0
+            ddf_v = ddf if ddf is not None else 0.0
+            res_v = resistivity if resistivity is not None else 0.0
+            col_v = colour if colour is not None else 1.0
 
-            if reclaim_reasons:
-                rec_oa = "OA RECOMMENDATION: OIL RECLAIMING REQUIRED (FULLER'S EARTH)"
-                reason_str = " | ".join(reclaim_reasons) + " -> Fuller's Earth Adsorption needed."
+            reasons = []
+            if acid_v > 0.30: reasons.append(f"Acid Number critical ({acid_v:.2f} mgKOH/g > 0.30 Limit)")
+            if 0 < ift_v < 22: reasons.append(f"Interfacial Tension critical ({ift_v:.1f} mN/m < 22 Limit)")
+            if col_v >= 4.0: reasons.append(f"Colour Scale critical ({col_v:.1f} ISO 2049 >= 4.0 Limit)")
+            if acid_v > 0.20 and ddf_v > 0.50 and 0 < res_v < 4: reasons.append("Severe Combined Aging Detected")
+
+            if reasons:
+                rec_oa = "OA RECOMMENDATION: MANDATORY TOTAL OIL REPLACEMENT (IEC 60422)"
+                reason_str = " | ".join(reasons) + " -> Full Oil Replacement Required."
+            elif corrosive_sulfur == "Corrosive":
+                rec_oa = "OA RECOMMENDATION: PASSIVATION OR RECLAIMING REQUIRED (IEC 60422)"
+                reason_str = "Corrosive Sulphur detected -> Risk of copper sulfide deposition."
             else:
-                recond_reasons = []
-                if 0 < bdv < 40: recond_reasons.append(f"Breakdown Voltage low ({bdv:.1f} kV < 40 Limit)")
-                if water > 30: recond_reasons.append(f"Water Content high ({water:.1f} ppm > 30 Limit)")
+                reclaim_reasons = []
+                if acid_v >= 0.15: reclaim_reasons.append(f"Acid elevated ({acid_v:.2f} mgKOH/g >= 0.15 Limit)")
+                if 22 <= ift_v <= 28: reclaim_reasons.append(f"IFT degraded ({ift_v:.1f} mN/m)")
+                if ddf_v > 0.10: reclaim_reasons.append(f"DDF/Tan Delta high ({ddf_v:.3f} > 0.10 Limit)")
+                if 0 < res_v < 60: reclaim_reasons.append(f"Resistivity low ({res_v:.1f} Gohm.m < 60 Limit)")
+                if col_v > 2.0: reclaim_reasons.append(f"Oil Colour degraded ({col_v:.1f} ISO 2049 > 2.0 Limit)")
+                if sediment_sludge == "Sludge": reclaim_reasons.append("Precipitable Sludge detected")
 
-                if recond_reasons:
-                    rec_oa = "OA RECOMMENDATION: OIL RECONDITIONING REQUIRED (FILTRATION)"
-                    reason_str = " | ".join(recond_reasons) + " -> Vacuum Dehydration & Filtration needed."
+                if reclaim_reasons:
+                    rec_oa = "OA RECOMMENDATION: OIL RECLAIMING REQUIRED (FULLER'S EARTH)"
+                    reason_str = " | ".join(reclaim_reasons) + " -> Fuller's Earth Adsorption needed."
                 else:
-                    rec_oa = "OA STATUS: NORMAL OPERATIONAL CONDITION (IEC 60422)"
-                    reason_str = "All active oil parameters within normal limits (Category C)."
+                    recond_reasons = []
+                    if 0 < bdv_v < 40: recond_reasons.append(f"Breakdown Voltage low ({bdv_v:.1f} kV < 40 Limit)")
+                    if water_v > 30: recond_reasons.append(f"Water Content high ({water_v:.1f} ppm > 30 Limit)")
+
+                    if recond_reasons:
+                        rec_oa = "OA RECOMMENDATION: OIL RECONDITIONING REQUIRED (FILTRATION)"
+                        reason_str = " | ".join(recond_reasons) + " -> Vacuum Dehydration & Filtration needed."
+                    else:
+                        rec_oa = "OA STATUS: NORMAL OPERATIONAL CONDITION (IEC 60422)"
+                        reason_str = "All active oil parameters within normal limits (Category C)."
 
         recommendation_oa_list.append(rec_oa)
         recommendation_oa_reason_list.append(reason_str)
@@ -509,15 +693,21 @@ ui.render_header("TRANSFORMER SUBSTATION MONITORING SYSTEM")
 df_all = load_data()
 df_metadata = load_metadata()
 
-tab_home, tab_nameplate, tab_input, tab_data, tab_insights, tab_trend = st.tabs([
-    "System Overview", "Transformer Identity & Nameplate", "Data Input Form", "Database Master & Ledger", "Diagnostic Insights", "HMI Trend Analysis"
+tab_home, tab_nameplate, tab_input, tab_data, tab_insights, tab_trend, tab_duval = st.tabs([
+    "System Overview",
+    "Transformer Identity & Nameplate",
+    "Data Input Form",
+    "Database Master & Ledger",
+    "Diagnostic Insights",
+    "HMI Trend Analysis",
+    "Duval Triangle 1"
 ])
 
 with tab_home:
     ui.render_title("SYSTEM ARCHITECTURE & TECHNICAL SPECIFICATIONS")
     st.markdown("""
     This platform operates as an enterprise **HMI Substation Monitoring System** engineered for high-voltage power transformers across all age categories.
-    
+
     The diagnostic engine combines physics-based domain standards with temporal machine learning:
     *   **Dynamic IEEE C57.104-2019 Standard:** Evaluates gas limits based on dynamically calculated operating age and O2/N2 ratio.
     *   **Duval Triangle 1 Geometry:** Identifies exact fault types (T1, T2, T3 Thermal Faults or PD, D1, D2 Electrical Discharges).
@@ -530,7 +720,7 @@ with tab_nameplate:
     ui.render_title("TRANSFORMER NAMEPLATE REGISTRATION PANEL")
     st.dataframe(df_metadata, use_container_width=True)
     st.markdown("---")
-    
+
     with st.form("nameplate_form"):
         col_n1, col_n2, col_n3 = st.columns(3)
         reg_id = col_n1.text_input("Transformer ID", placeholder="Example: Main_Transformer_06").strip()
@@ -558,12 +748,12 @@ with tab_nameplate:
             else:
                 meta_dict = {
                     'ID_Trafo': reg_id, 'Manufacturer': reg_manuf, 'Serial_Number': reg_sn,
-                    'Year_Manufactured': int(reg_year) if reg_year else 2010, 
-                    'Model_Type': reg_model, 
+                    'Year_Manufactured': int(reg_year) if reg_year else 2010,
+                    'Model_Type': reg_model,
                     'Capacity_MVA': float(reg_mva) if reg_mva else 0.0,
                     'Phase_Count': int(reg_phase), 'Nominal_Voltage_kV': reg_voltage, 'Nominal_Current_A': reg_current,
-                    'Frequency_Hz': float(reg_freq) if reg_freq else 50.0, 
-                    'Vector_Group': reg_vector, 
+                    'Frequency_Hz': float(reg_freq) if reg_freq else 50.0,
+                    'Vector_Group': reg_vector,
                     'Impedance_Pct': float(reg_impedance) if reg_impedance else 0.0
                 }
                 insert_metadata(meta_dict)
@@ -573,102 +763,115 @@ with tab_nameplate:
 with tab_input:
     ui.render_title("LABORATORY OBSERVATION INPUT PANEL")
     registered_trafos = sorted(df_metadata['ID_Trafo'].unique().tolist()) if not df_metadata.empty else []
-    
+
     if not registered_trafos:
         st.warning("No transformers registered. Please register unit nameplate first.")
     else:
-        col_meta1, col_meta2, col_meta3 = st.columns(3)
-        trafo_id_input = col_meta1.selectbox("SELECT REGISTERED TRANSFORMER", registered_trafos)
-        test_date = col_meta2.date_input("TEST DATE", datetime.now())
-        purification_status = col_meta3.selectbox("OIL PURIFICATION STATUS", ["Normal", "Reconditioning", "Reclaiming", "Oil Replacement"])
+        if st.session_state.get('pending_data') is not None:
+            st.error(f"**INPUT ANOMALY DETECTED:**\n\n{st.session_state.get('anomaly_reason')}")
+            st.warning("Nilai yang diinput melebihi ambang batas fisik/operasional. Silakan pilih tindakan:")
 
-        with st.form("dga_input_form"):
-            st.markdown("**DISSOLVED GAS ANALYSIS (PPM) & O2/N2 RATIO:**")
-            c1, c2, c3, c4 = st.columns(4)
-            h2 = c1.number_input("H2 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
-            ch4 = c2.number_input("CH4 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
-            c2h6 = c3.number_input("C2H6 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
-            c2h4 = c4.number_input("C2H4 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
+            col_c1, col_c2 = st.columns(2)
+            if col_c1.button("Force Save Data (Simpan Paksa)", type="primary"):
+                p_data = st.session_state['pending_data']
+                p_data['Is_Anomali'] = 'Yes'
+                insert_data(p_data)
+                st.session_state['pending_data'] = None
+                st.session_state['anomaly_reason'] = None
+                st.success("Data anomali berhasil disimpan secara paksa.")
+                st.rerun()
 
-            c5, c6, c7, c8 = st.columns(4)
-            c2h2 = c5.number_input("C2H2 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
-            co = c6.number_input("CO (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
-            co2 = c7.number_input("CO2 (ppm)", min_value=0.0, value=None, placeholder="0.0", step=0.1)
-            ratio_o2_n2 = c8.number_input("O2/N2 Ratio (ppm/ppm)", min_value=0.0, max_value=1.0, value=None, placeholder="e.g. 0.32", step=0.01)
+            if col_c2.button("Cancel Operation (Batalkan)"):
+                st.session_state['pending_data'] = None
+                st.session_state['anomaly_reason'] = None
+                st.info("Input dibatalkan.")
+                st.rerun()
 
-            st.markdown("**EXPANDED OIL ANALYSIS (IEC 60422 PARAMETERS):**")
-            o1, o2_col, o3, o4 = st.columns(4)
-            bdv = o1.number_input("BDV (kV)", min_value=0.0, value=None, placeholder="e.g. 50.0", step=0.1)
-            acid = o2_col.number_input("Acid Number (mgKOH/g)", min_value=0.0, value=None, placeholder="e.g. 0.05", step=0.01)
-            water = o3.number_input("Water Content (ppm)", min_value=0.0, value=None, placeholder="e.g. 12.0", step=0.1)
-            ift = o4.number_input("IFT (mN/m)", min_value=0.0, value=None, placeholder="e.g. 30.0", step=0.1)
+        else:
+            col_meta1, col_meta2, col_meta3 = st.columns(3)
+            trafo_id_input = col_meta1.selectbox("SELECT REGISTERED TRANSFORMER", registered_trafos)
+            test_date = col_meta2.date_input("TEST DATE", datetime.now())
+            purification_status = col_meta3.selectbox("OIL PURIFICATION STATUS", ["Normal", "Reconditioning", "Reclaiming", "Oil Replacement"])
 
-            o5, o6, o7, o8 = st.columns(4)
-            ddf = o5.number_input("DDF / Tan Delta (90°C)", min_value=0.0, value=None, placeholder="e.g. 0.008", step=0.001)
-            resistivity = o6.number_input("Resistivity Gohm.m (20°C)", min_value=0.0, value=None, placeholder="e.g. 70.0", step=1.0)
-            colour_iso = o7.number_input("Oil Colour (ISO 2049 Scale)", min_value=0.5, max_value=8.0, value=None, placeholder="0.5 - 8.0", step=0.5)
-            sediment_sludge = o8.selectbox("Sediment / Sludge State", ["No", "Sediment", "Sludge"])
+            with st.form("dga_input_form"):
+                st.markdown("### DISSOLVED GAS ANALYSIS (PPM) & O2/N2 RATIO")
 
-            o9, o10, o11, o12 = st.columns(4)
-            corrosive_sulfur = o9.selectbox("Corrosive Sulphur", ["Non-Corrosive", "Corrosive"])
-            particles_iso = o10.selectbox("Particles ISO 4406", ["Good", "Fair", "Poor"])
-            inhibitor = o11.number_input("Inhibitor Content (%)", min_value=0.0, max_value=100.0, value=None, placeholder="0 - 100", step=1.0)
-            passivator = o12.number_input("Passivator Content (mg/kg)", min_value=0.0, value=None, placeholder="e.g. 100.0", step=1.0)
+                c1, c2, c3, c4 = st.columns(4)
+                h2 = c1.number_input("H2 (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                ch4 = c2.number_input("CH4 (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                c2h6 = c3.number_input("C2H6 (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                c2h4 = c4.number_input("C2H4 (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
 
-            c_f1, c_f2 = st.columns(2)
-            flash_point = c_f1.number_input("Flash Point (°C)", min_value=0.0, value=None, placeholder="e.g. 145.0", step=1.0)
-            pcb_content = c_f2.number_input("PCB Content (mg/kg)", min_value=0.0, value=None, placeholder="e.g. 0.0", step=0.1)
+                c5, c6, c7, c8 = st.columns(4)
+                c2h2 = c5.number_input("C2H2 (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                co = c6.number_input("CO (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                co2 = c7.number_input("CO2 (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                ratio_o2_n2 = c8.number_input("O2/N2 Ratio", min_value=0.0, max_value=1.0, value=None, placeholder="Leave blank for N/A", step=0.01)
 
-            if st.form_submit_button("EXECUTE EVALUATION & SAVE RECORD"):
-                input_dict = {
-                    'ID_Trafo': trafo_id_input.strip(), 'Tanggal_Uji': test_date,
-                    'H2': float(h2) if h2 is not None else 0.0, 
-                    'CH4': float(ch4) if ch4 is not None else 0.0, 
-                    'C2H6': float(c2h6) if c2h6 is not None else 0.0, 
-                    'C2H4': float(c2h4) if c2h4 is not None else 0.0, 
-                    'C2H2': float(c2h2) if c2h2 is not None else 0.0,
-                    'CO': float(co) if co is not None else 0.0, 
-                    'CO2': float(co2) if co2 is not None else 0.0, 
-                    'Ratio_O2_N2': float(ratio_o2_n2) if ratio_o2_n2 is not None else 0.32,
-                    'BDV': float(bdv) if bdv is not None else 0.0, 
-                    'Acid': float(acid) if acid is not None else 0.0, 
-                    'Water': float(water) if water is not None else 0.0, 
-                    'IFT': float(ift) if ift is not None else 0.0,
-                    'DDF': float(ddf) if ddf is not None else 0.0, 
-                    'Resistivity': float(resistivity) if resistivity is not None else 0.0, 
-                    'Colour_ISO2049': float(colour_iso) if colour_iso is not None else 1.0,
-                    'Sediment_Sludge': sediment_sludge, 
-                    'Corrosive_Sulphur': corrosive_sulfur,
-                    'Particles_ISO': particles_iso, 
-                    'Inhibitor_Content': float(inhibitor) if inhibitor is not None else 0.0,
-                    'Passivator_Content': float(passivator) if passivator is not None else 0.0, 
-                    'Flash_Point': float(flash_point) if flash_point is not None else 0.0,
-                    'PCB_Content': float(pcb_content) if pcb_content is not None else 0.0, 
-                    'Status_Pemurnian': purification_status,
-                    'Is_Anomali': 'No'
-                }
-                has_anomaly, anomaly_reason = check_anomaly(df_all, trafo_id_input.strip(), pd.to_datetime(test_date), input_dict)
-                if has_anomaly:
-                    st.session_state['pending_data'] = input_dict
-                    st.session_state['anomaly_reason'] = anomaly_reason
-                else:
-                    insert_data(input_dict)
-                    st.success(f"Record for '{trafo_id_input.strip()}' saved successfully.")
-                    st.rerun()
+                st.markdown("---")
+                st.markdown("### EXPANDED OIL ANALYSIS (IEC 60422 PARAMETERS)")
 
-    if 'pending_data' in st.session_state and st.session_state['pending_data'] is not None:
-        st.markdown("---")
-        st.error(f"**INPUT ANOMALY DETECTED:**\n\n{st.session_state['anomaly_reason']}")
-        col_c1, col_c2 = st.columns(2)
-        if col_c1.button("Force Save Data"):
-            p_data = st.session_state['pending_data']
-            p_data['Is_Anomali'] = 'Yes'
-            insert_data(p_data)
-            st.session_state['pending_data'] = None
-            st.rerun()
-        if col_c2.button("Cancel Operation"):
-            st.session_state['pending_data'] = None
-            st.rerun()
+                o1, o2_col, o3, o4 = st.columns(4)
+                bdv = o1.number_input("BDV (kV)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                acid = o2_col.number_input("Acid Number (mgKOH/g)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.01)
+                water = o3.number_input("Water Content (ppm)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+                ift = o4.number_input("IFT (mN/m)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+
+                o5, o6, o7, o8 = st.columns(4)
+                ddf = o5.number_input("DDF / Tan Delta", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.001)
+                resistivity = o6.number_input("Resistivity (Gohm.m)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=1.0)
+                colour_iso = o7.number_input("Oil Colour (ISO)", min_value=0.5, max_value=8.0, value=None, placeholder="Leave blank for N/A", step=0.5)
+                sediment_sludge = o8.selectbox("Sediment / Sludge State", ["Inherit Last", "No", "Sediment", "Sludge"])
+
+                o9, o10, o11, o12 = st.columns(4)
+                corrosive_sulfur = o9.selectbox("Corrosive Sulphur", ["Inherit Last", "Non-Corrosive", "Corrosive"])
+                particles_iso = o10.selectbox("Particles ISO 4406", ["Inherit Last", "Good", "Fair", "Poor"])
+                inhibitor = o11.number_input("Inhibitor Content (%)", min_value=0.0, max_value=100.0, value=None, placeholder="Leave blank for N/A", step=1.0)
+                passivator = o12.number_input("Passivator (mg/kg)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=1.0)
+
+                c_f1, c_f2 = st.columns(2)
+                flash_point = c_f1.number_input("Flash Point (°C)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=1.0)
+                pcb_content = c_f2.number_input("PCB Content (mg/kg)", min_value=0.0, value=None, placeholder="Leave blank for N/A", step=0.1)
+
+                if st.form_submit_button("EXECUTE EVALUATION & SAVE RECORD"):
+                    input_dict = {
+                        'ID_Trafo': trafo_id_input.strip(),
+                        'Tanggal_Uji': str(test_date),
+                        'H2': float(h2) if h2 is not None else None,
+                        'CH4': float(ch4) if ch4 is not None else None,
+                        'C2H6': float(c2h6) if c2h6 is not None else None,
+                        'C2H4': float(c2h4) if c2h4 is not None else None,
+                        'C2H2': float(c2h2) if c2h2 is not None else None,
+                        'CO': float(co) if co is not None else None,
+                        'CO2': float(co2) if co2 is not None else None,
+                        'Ratio_O2_N2': float(ratio_o2_n2) if ratio_o2_n2 is not None else None,
+                        'BDV': float(bdv) if bdv is not None else None,
+                        'Acid': float(acid) if acid is not None else None,
+                        'Water': float(water) if water is not None else None,
+                        'IFT': float(ift) if ift is not None else None,
+                        'DDF': float(ddf) if ddf is not None else None,
+                        'Resistivity': float(resistivity) if resistivity is not None else None,
+                        'Colour_ISO2049': float(colour_iso) if colour_iso is not None else None,
+                        'Inhibitor_Content': float(inhibitor) if inhibitor is not None else None,
+                        'Passivator_Content': float(passivator) if passivator is not None else None,
+                        'Flash_Point': float(flash_point) if flash_point is not None else None,
+                        'PCB_Content': float(pcb_content) if pcb_content is not None else None,
+                        'Sediment_Sludge': sediment_sludge if sediment_sludge != "Inherit Last" else None,
+                        'Corrosive_Sulphur': corrosive_sulfur if corrosive_sulfur != "Inherit Last" else None,
+                        'Particles_ISO': particles_iso if particles_iso != "Inherit Last" else None,
+                        'Status_Pemurnian': purification_status,
+                        'Is_Anomali': 'No'
+                    }
+
+                    has_anomaly, anomaly_reason = check_anomaly(df_all, trafo_id_input.strip(), pd.to_datetime(test_date), input_dict)
+                    if has_anomaly:
+                        st.session_state['pending_data'] = input_dict
+                        st.session_state['anomaly_reason'] = anomaly_reason
+                        st.rerun()
+                    else:
+                        insert_data(input_dict)
+                        st.success(f"Record for '{trafo_id_input.strip()}' saved successfully.")
+                        st.rerun()
 
 with tab_data:
     ui.render_title("MASTER LEDGER & RECORD MANAGEMENT")
@@ -676,7 +879,7 @@ with tab_data:
         with st.spinner("Processing analytical models..."):
             df_prognosis = calculate_prognosis_and_prediction(df_all)
         st.dataframe(df_prognosis, use_container_width=True)
-        
+
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
             buf1 = io.BytesIO()
@@ -686,17 +889,17 @@ with tab_data:
             buf2 = io.BytesIO()
             with pd.ExcelWriter(buf2, engine='openpyxl') as w: df_metadata.to_excel(w, index=False)
             st.download_button("EXPORT NAMEPLATE METADATA (.XLSX)", buf2.getvalue(), f"Nameplates_{datetime.now().strftime('%Y%m%d')}.xlsx")
-        
+
         st.markdown("---")
         ui.render_title("HISTORICAL RECORD DELETION CONTROL")
         delete_options = df_all.apply(lambda x: f"ID: {x['id']} | Transformer: {x['ID_Trafo']} | Date: {x['Tanggal_Uji']}", axis=1).tolist()
         record_to_delete = st.selectbox("SELECT HISTORICAL RECORD TO PURGE", ["-- Select Record --"] + delete_options)
-        
+
         if st.button("PURGE SELECTED HISTORICAL ROW"):
             if record_to_delete != "-- Select Record --":
                 db_id = int(record_to_delete.split("|")[0].replace("ID:", "").strip())
                 st.session_state['delete_confirm_id'] = db_id
-                
+
         if 'delete_confirm_id' in st.session_state and st.session_state['delete_confirm_id'] is not None:
             st.warning("CONFIRMATION: Are you sure you want to purge this record?")
             col_d1, col_d2 = st.columns(2)
@@ -714,30 +917,36 @@ with tab_insights:
         df_prog_insight = calculate_prognosis_and_prediction(df_all)
         insight_trafo = st.selectbox("SELECT TRANSFORMER UNIT", df_prog_insight['ID_Trafo'].unique())
         df_insight_filtered = df_prog_insight[(df_prog_insight['ID_Trafo'] == insight_trafo) & (df_prog_insight['Tipe_Data'] == 'Historis')].sort_values('Tanggal_Uji').reset_index(drop=True)
-        
+
         if not df_insight_filtered.empty:
             latest_record = df_insight_filtered.iloc[-1]
             meta_match = df_metadata[df_metadata['ID_Trafo'] == insight_trafo]
-            if not meta_match.empty and pd.notna(meta_match.iloc[0]['Year_Manufactured']):
+            
+            # Pengecekan keamanan metadata
+            if not meta_match.empty and pd.notna(meta_match.iloc[0].get('Year_Manufactured')):
                 y_manuf = meta_match.iloc[0]['Year_Manufactured']
                 curr_year = pd.to_datetime(latest_record['Tanggal_Uji']).year
                 disp_age = f"{curr_year - y_manuf} Years (Mfg: {y_manuf})"
-                disp_manuf, disp_cap = meta_match.iloc[0]['Manufacturer'], f"{meta_match.iloc[0]['Capacity_MVA']} MVA"
+                disp_manuf = meta_match.iloc[0].get('Manufacturer', 'N/A')
+                disp_cap = f"{meta_match.iloc[0].get('Capacity_MVA', 'N/A')} MVA"
             else:
                 disp_age, disp_manuf, disp_cap = "Unknown", "N/A", "N/A"
 
             fault_rows = df_insight_filtered[df_insight_filtered['Status_DGA'] != 'Normal']
             first_fault_text = f"{fault_rows.iloc[0]['Tanggal_Uji']} ({fault_rows.iloc[0]['Status_DGA']})" if not fault_rows.empty else "NONE DETECTED (Normal Status)"
-            
+
             ui.render_insights_datasheet(latest_record, disp_manuf, disp_cap, disp_age, first_fault_text)
 
 with tab_trend:
     ui.render_title("HMI GAS DYNAMICS & INSTRUMENT GAUGES")
-    if not df_all.empty:
+    # Guard untuk pangkalan data kosong
+    if df_all.empty:
+        st.info("Belum ada data uji untuk trafo.")
+    else:
         trafo_filter = st.selectbox("SELECT TRANSFORMER UNIT", df_all['ID_Trafo'].unique(), key="trend_selector")
         df_graph = calculate_prognosis_and_prediction(df_all)
         df_filtered = df_graph[df_graph['ID_Trafo'] == trafo_filter].sort_values('Tanggal_Uji').reset_index(drop=True)
-        
+
         fig_gas = go.Figure()
         gas_list, colors = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2'], ['#38BDF8', '#F59E0B', '#10B981', '#EF4444', '#A855F7']
         df_hist_only = df_filtered[df_filtered['Tipe_Data'] == 'Historis']
@@ -769,23 +978,65 @@ with tab_trend:
         ui.render_title("PHYSICAL & CHEMICAL OIL GAUGES (LAST OBSERVATION - CATEGORY C <72.5 kV)")
         if not df_hist_only.empty:
             last_oa = df_hist_only.iloc[-1]
-            
-            # GAUGE ROW 1: BDV, ACID, WATER, IFT
+
             g1, g2, g3, g4 = st.columns(4)
-            g1.plotly_chart(create_hmi_gauge(float(last_oa.get('BDV', 0)), "BDV (kV) [Min 40]", 0, 100, [{'range': [0, 30], 'color': "#DC2626"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 100], 'color': "#16A34A"}]), use_container_width=True)
-            g2.plotly_chart(create_hmi_gauge(float(last_oa.get('Acid', 0)), "Acid (mgKOH/g) [Max 0.15]", 0, 0.5, [{'range': [0, 0.15], 'color': "#16A34A"}, {'range': [0.15, 0.30], 'color': "#D97706"}, {'range': [0.30, 0.5], 'color': "#DC2626"}]), use_container_width=True)
-            g3.plotly_chart(create_hmi_gauge(float(last_oa.get('Water', 0)), "Water (ppm) [Max 30]", 0, 60, [{'range': [0, 30], 'color': "#16A34A"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 60], 'color': "#DC2626"}]), use_container_width=True)
-            g4.plotly_chart(create_hmi_gauge(float(last_oa.get('IFT', 0)), "IFT (mN/m) [Min 28]", 0, 50, [{'range': [0, 22], 'color': "#DC2626"}, {'range': [22, 28], 'color': "#D97706"}, {'range': [28, 50], 'color': "#16A34A"}]), use_container_width=True)
+            g1.plotly_chart(create_hmi_gauge(float(last_oa.get('BDV', 0)) if pd.notna(last_oa.get('BDV')) else 0.0, "BDV (kV) [Min 40]", 0, 100, [{'range': [0, 30], 'color': "#DC2626"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 100], 'color': "#16A34A"}]), use_container_width=True)
+            g2.plotly_chart(create_hmi_gauge(float(last_oa.get('Acid', 0)) if pd.notna(last_oa.get('Acid')) else 0.0, "Acid (mgKOH/g) [Max 0.15]", 0, 0.5, [{'range': [0, 0.15], 'color': "#16A34A"}, {'range': [0.15, 0.30], 'color': "#D97706"}, {'range': [0.30, 0.5], 'color': "#DC2626"}]), use_container_width=True)
+            g3.plotly_chart(create_hmi_gauge(float(last_oa.get('Water', 0)) if pd.notna(last_oa.get('Water')) else 0.0, "Water (ppm) [Max 30]", 0, 60, [{'range': [0, 30], 'color': "#16A34A"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 60], 'color': "#DC2626"}]), use_container_width=True)
+            g4.plotly_chart(create_hmi_gauge(float(last_oa.get('IFT', 0)) if pd.notna(last_oa.get('IFT')) else 0.0, "IFT (mN/m) [Min 28]", 0, 50, [{'range': [0, 22], 'color': "#DC2626"}, {'range': [22, 28], 'color': "#D97706"}, {'range': [28, 50], 'color': "#16A34A"}]), use_container_width=True)
 
-            # GAUGE ROW 2: DDF, RESISTIVITY, COLOUR ISO 2049, INHIBITOR
             g5, g6, g7, g8 = st.columns(4)
-            g5.plotly_chart(create_hmi_gauge(float(last_oa.get('DDF', 0)), "DDF/Tan Delta [Max 0.10]", 0, 0.60, [{'range': [0, 0.10], 'color': "#16A34A"}, {'range': [0.10, 0.50], 'color': "#D97706"}, {'range': [0.50, 0.60], 'color': "#DC2626"}]), use_container_width=True)
-            g6.plotly_chart(create_hmi_gauge(float(last_oa.get('Resistivity', 0)), "Resistivity Gohm.m [Min 60]", 0, 100, [{'range': [0, 4], 'color': "#DC2626"}, {'range': [4, 60], 'color': "#D97706"}, {'range': [60, 100], 'color': "#16A34A"}]), use_container_width=True)
-            g7.plotly_chart(create_hmi_gauge(float(last_oa.get('Colour_ISO2049', 1.0)), "Colour (ISO 2049) [Max 2.0]", 0.5, 8.0, [{'range': [0.5, 2.0], 'color': "#16A34A"}, {'range': [2.0, 3.5], 'color': "#D97706"}, {'range': [3.5, 8.0], 'color': "#DC2626"}]), use_container_width=True)
-            g8.plotly_chart(create_hmi_gauge(float(last_oa.get('Inhibitor_Content', 0)), "Inhibitor Content (%) [Min 60]", 0, 100, [{'range': [0, 40], 'color': "#DC2626"}, {'range': [40, 60], 'color': "#D97706"}, {'range': [60, 100], 'color': "#16A34A"}]), use_container_width=True)
+            g5.plotly_chart(create_hmi_gauge(float(last_oa.get('DDF', 0)) if pd.notna(last_oa.get('DDF')) else 0.0, "DDF/Tan Delta [Max 0.10]", 0, 0.60, [{'range': [0, 0.10], 'color': "#16A34A"}, {'range': [0.10, 0.50], 'color': "#D97706"}, {'range': [0.50, 0.60], 'color': "#DC2626"}]), use_container_width=True)
+            g6.plotly_chart(create_hmi_gauge(float(last_oa.get('Resistivity', 0)) if pd.notna(last_oa.get('Resistivity')) else 0.0, "Resistivity Gohm.m [Min 60]", 0, 100, [{'range': [0, 4], 'color': "#DC2626"}, {'range': [4, 60], 'color': "#D97706"}, {'range': [60, 100], 'color': "#16A34A"}]), use_container_width=True)
+            g7.plotly_chart(create_hmi_gauge(float(last_oa.get('Colour_ISO2049', 0.5)) if pd.notna(last_oa.get('Colour_ISO2049')) else 0.5, "Colour (ISO 2049) [Max 2.0]", 0.5, 8.0, [{'range': [0.5, 2.0], 'color': "#16A34A"}, {'range': [2.0, 3.5], 'color': "#D97706"}, {'range': [3.5, 8.0], 'color': "#DC2626"}]), use_container_width=True)
+            g8.plotly_chart(create_hmi_gauge(float(last_oa.get('Inhibitor_Content', 0)) if pd.notna(last_oa.get('Inhibitor_Content')) else 0.0, "Inhibitor Content (%) [Min 60]", 0, 100, [{'range': [0, 40], 'color': "#DC2626"}, {'range': [40, 60], 'color': "#D97706"}, {'range': [60, 100], 'color': "#16A34A"}]), use_container_width=True)
 
-            # GAUGE ROW 3: PASSIVATOR, FLASH POINT, PCB
             g9, g10, g11, _ = st.columns(4)
-            g9.plotly_chart(create_hmi_gauge(float(last_oa.get('Passivator_Content', 0)), "Passivator (mg/kg) [Min 70]", 0, 150, [{'range': [0, 50], 'color': "#DC2626"}, {'range': [50, 70], 'color': "#D97706"}, {'range': [70, 150], 'color': "#16A34A"}]), use_container_width=True)
-            g10.plotly_chart(create_hmi_gauge(float(last_oa.get('Flash_Point', 0)), "Flash Point (°C) [Min 135]", 0, 180, [{'range': [0, 120], 'color': "#DC2626"}, {'range': [120, 135], 'color': "#D97706"}, {'range': [135, 180], 'color': "#16A34A"}]), use_container_width=True)
-            g11.plotly_chart(create_hmi_gauge(float(last_oa.get('PCB_Content', 0)), "PCB Content (mg/kg) [Max 2.0]", 0, 10, [{'range': [0, 2.0], 'color': "#16A34A"}, {'range': [2.0, 5.0], 'color': "#D97706"}, {'range': [5.0, 10.0], 'color': "#DC2626"}]), use_container_width=True)
+            g9.plotly_chart(create_hmi_gauge(float(last_oa.get('Passivator_Content', 0)) if pd.notna(last_oa.get('Passivator_Content')) else 0.0, "Passivator (mg/kg) [Min 70]", 0, 150, [{'range': [0, 50], 'color': "#DC2626"}, {'range': [50, 70], 'color': "#D97706"}, {'range': [70, 150], 'color': "#16A34A"}]), use_container_width=True)
+            g10.plotly_chart(create_hmi_gauge(float(last_oa.get('Flash_Point', 0)) if pd.notna(last_oa.get('Flash_Point')) else 0.0, "Flash Point (°C) [Min 135]", 0, 180, [{'range': [0, 120], 'color': "#DC2626"}, {'range': [120, 135], 'color': "#D97706"}, {'range': [135, 180], 'color': "#16A34A"}]), use_container_width=True)
+            g11.plotly_chart(create_hmi_gauge(float(last_oa.get('PCB_Content', 0)) if pd.notna(last_oa.get('PCB_Content')) else 0.0, "PCB Content (mg/kg) [Max 2.0]", 0, 10, [{'range': [0, 2.0], 'color': "#16A34A"}, {'range': [2.0, 5.0], 'color': "#D97706"}, {'range': [5.0, 10.0], 'color': "#DC2626"}]), use_container_width=True)
+
+with tab_duval:
+    ui.render_title("DUVAL TRIANGLE 1 DIAGNOSTIC PANEL (IEEE C57.104 / IEC 60599)")
+
+    # Guard untuk pangkalan data kosong
+    if df_all.empty:
+        st.info("Belum ada data uji untuk trafo.")
+    else:
+        df_duval = calculate_prognosis_and_prediction(df_all)
+        duval_trafo = st.selectbox("SELECT TRANSFORMER UNIT", df_duval['ID_Trafo'].unique(), key="duval_selector")
+
+        df_d_filtered = df_duval[(df_duval['ID_Trafo'] == duval_trafo) & (df_duval['Tipe_Data'] == 'Historis')].sort_values('Tanggal_Uji').reset_index(drop=True)
+
+        if not df_d_filtered.empty:
+            latest_d = df_d_filtered.iloc[-1]
+            current_ieee_status = str(latest_d.get('DGA_Status_IEEE', '')).strip()
+
+            if current_ieee_status == "Status 1":
+                st.info(f"**DUVAL TRIANGLE INACTIVE FOR {duval_trafo}**\n\n"
+                        f"Berdasarkan standar IEEE C57.104, analisis Segitiga Duval hanya berlaku apabila konsentrasi gas melampaui batas normal.\n\n"
+                        f"- **Status IEEE Terbaru ({latest_d.get('Tanggal_Uji')}):** `{current_ieee_status}` (Normal Condition)\n"
+                        f"- **Physics Fault Verdict:** `{latest_d.get('Status_DGA')}`\n\n"
+                        f"*Segitiga Duval akan otomatis dirender jika kondisi DGA trafo memasuki Status 2 (Caution) atau Status 3 (Fault).*")
+            else:
+                c_ch4 = float(latest_d.get('CH4', 0)) if pd.notna(latest_d.get('CH4')) else 0.0
+                c_c2h4 = float(latest_d.get('C2H4', 0)) if pd.notna(latest_d.get('C2H4')) else 0.0
+                c_c2h2 = float(latest_d.get('C2H2', 0)) if pd.notna(latest_d.get('C2H2')) else 0.0
+
+                fig_duval, p_ch4, p_c2h4, p_c2h2 = plot_duval_triangle1(c_ch4, c_c2h4, c_c2h2, duval_trafo)
+
+                col_d_left, col_d_right = st.columns([2, 1])
+
+                with col_d_left:
+                    st.plotly_chart(fig_duval, use_container_width=True)
+
+                with col_d_right:
+                    st.markdown("### CURRENT GAS PROPORTIONS")
+                    st.write(f"**Observation Date:** `{latest_d.get('Tanggal_Uji')}`")
+                    st.write(f"**IEEE Status:** `{current_ieee_status}`")
+                    st.write(f"**% CH4:** `{p_ch4:.2f} %`")
+                    st.write(f"**% C2H4:** `{p_c2h4:.2f} %`")
+                    st.write(f"**% C2H2:** `{p_c2h2:.2f} %`")
+                    st.markdown("---")
+                    st.write(f"**Physics Fault Verdict:** `{latest_d.get('Status_DGA')}`")
+                    st.write(f"**Paper Status:** `{latest_d.get('Paper_Status')}`")
