@@ -115,7 +115,6 @@ def load_data():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM tabel_master ORDER BY Tanggal_Uji ASC", conn)
     conn.close()
-    # Pembentukan kolom Tanggal_Uji_DT tanpa syarat keberadaan baris
     df['Tanggal_Uji_DT'] = pd.to_datetime(df.get('Tanggal_Uji', pd.Series(dtype='str')), errors='coerce')
     return df
 
@@ -283,11 +282,9 @@ def get_duval_minimum(ch4, c2h4, c2h2):
     p_c2h4 = (c2h4 / total) * 100
     p_c2h2 = (c2h2 / total) * 100
 
-    # 1. Partial Discharge (PD)
     if p_ch4 >= 98:
         return "PD"
     
-    # 2. Zone T1, T2, T3 (Thermal Faults - Tanpa C2H2 signifikan)
     if p_c2h2 < 4:
         if p_c2h4 < 20:
             return "T1"
@@ -296,7 +293,6 @@ def get_duval_minimum(ch4, c2h4, c2h2):
         else:
             return "T3"
             
-    # 3. Zone D1, D2, DT (Discharges & Mixed Faults)
     if p_c2h4 < 23:
         if p_c2h2 >= 13:
             return "D1"
@@ -390,7 +386,7 @@ def plot_duval_triangle1(ch4, c2h4, c2h2, trafo_id):
         'text': [f"<b>{trafo_id}</b>"], 'textposition': "top center",
         'textfont': {'size': 12, 'color': '#000000', 'family': 'IBM Plex Mono'},
         'marker': {'symbol': 'diamond', 'color': '#FFFF00', 'size': 16, 'line': {'width': 2.5, 'color': '#000000'}},
-        'name': 'Observasi Saat Ini', 'hoverinfo': 'text'
+        'name': 'Current Observation', 'hoverinfo': 'text'
     }))
 
     fig.update_layout({
@@ -414,7 +410,6 @@ def calculate_prognosis_and_prediction(df_raw):
     df = df_raw.copy()
     df_meta = load_metadata()
 
-    # Validasi keberadaan kolom Status_Pemurnian
     if 'Status_Pemurnian' not in df.columns:
         df['Status_Pemurnian'] = 'Normal'
 
@@ -431,7 +426,6 @@ def calculate_prognosis_and_prediction(df_raw):
 
     gas_cols = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2']
 
-    # Penanganan Vektor Presisi & Pemisahan Era Pemurnian
     is_purify_row = df['Status_Pemurnian'].fillna('').astype(str).str.strip().isin(['Oil Replacement', 'Reclaiming', 'Reconditioning'])
 
     for col in gas_cols:
@@ -458,7 +452,7 @@ def calculate_prognosis_and_prediction(df_raw):
 
     for trafo in df['ID_Trafo'].unique():
         df_trafo = df[df['ID_Trafo'] == trafo].copy()
-        df_trafo['Tipe_Data'] = 'Historis'
+        df_trafo['Tipe_Data'] = 'Historical'
         df_trafo = df_trafo.sort_values('Tanggal_Uji_DT').reset_index(drop=True)
 
         last_time_dt = df_trafo['Tanggal_Uji_DT'].iloc[-1]
@@ -505,7 +499,7 @@ def calculate_prognosis_and_prediction(df_raw):
             new_row = last_data.copy()
             new_row['Tanggal_Uji'] = prediction_dates[i]
             new_row['Tanggal_Uji_DT'] = pd.to_datetime(prediction_dates[i])
-            new_row['Tipe_Data'] = 'Prediksi'
+            new_row['Tipe_Data'] = 'Forecast'
             new_row['Status_Pemurnian'] = np.nan
             for col in forecast_columns:
                 new_row[col] = round(future_predictions[col][i], 2)
@@ -557,7 +551,6 @@ def calculate_prognosis_and_prediction(df_raw):
                         if (g == 'C2H2' and diff_ppm >= 0.5) or (g != 'C2H2' and diff_ppm > t3_delta_limits[g]) or (annual_rate > t4_rate_limits[g]):
                             is_rates_anomali = True
 
-        vonis_ai = row['Vonis_AI_Mentah']
         if not exceed_t1_any and not is_rates_anomali and not exceed_t2_any:
             status_ieee, status_dga_final = "Status 1", "Normal"
         elif exceed_t2_any or is_rates_anomali:
@@ -565,16 +558,7 @@ def calculate_prognosis_and_prediction(df_raw):
             c_ch4 = row['CH4'] if pd.notna(row['CH4']) else 0.0
             c_c2h4 = row['C2H4'] if pd.notna(row['C2H4']) else 0.0
             c_c2h2 = row['C2H2'] if pd.notna(row['C2H2']) else 0.0
-            vonis_fisika_pasti = get_duval_minimum(c_ch4, c_c2h4, c_c2h2)
-
-            if c_c2h2 == 0 and vonis_ai in ['D1', 'D2']:
-                status_dga_final = vonis_fisika_pasti
-            elif vonis_fisika_pasti == "T3" and vonis_ai in ['T1', 'T2', 'Normal', 'Caution']:
-                status_dga_final = "T3"
-            elif vonis_ai in ['Normal', 'Caution']:
-                status_dga_final = vonis_fisika_pasti
-            else:
-                status_dga_final = vonis_ai
+            status_dga_final = get_duval_minimum(c_ch4, c_c2h4, c_c2h2)
         else:
             status_ieee, status_dga_final = "Status 2", "Caution"
 
@@ -603,7 +587,7 @@ def calculate_prognosis_and_prediction(df_raw):
                 (df_master['ID_Trafo'] == trafo_id) &
                 (df_master['Tanggal_Uji_DT'] >= tgl_p) &
                 (df_master['Tanggal_Uji_DT'] <= row['Tanggal_Uji_DT']) &
-                (df_master['Tipe_Data'] == 'Historis')
+                (df_master['Tipe_Data'] == 'Historical')
             ]
             if len(sub_df) < 6 or umb < 4:
                 is_currently_frozen = True
@@ -619,7 +603,7 @@ def calculate_prognosis_and_prediction(df_raw):
         corrosive_sulfur = str(row.get('Corrosive_Sulphur')).strip() if pd.notna(row.get('Corrosive_Sulphur')) else ""
 
         if is_currently_frozen:
-            rec_oa = "OA STATUS: FREEZE MODE ACTIVE (MONITORING ERA BARU)"
+            rec_oa = "OA STATUS: FREEZE MODE ACTIVE (MONITORING NEW ERA)"
             reason_str = "New oil baseline detected. System under intensive post-maintenance monitoring."
         elif all(v is None for v in [bdv, acid, water, ift]):
             rec_oa = "OA STATUS: DATA NOT TESTED (N/A)"
@@ -641,10 +625,10 @@ def calculate_prognosis_and_prediction(df_raw):
 
             if reasons:
                 rec_oa = "OA RECOMMENDATION: MANDATORY TOTAL OIL REPLACEMENT (IEC 60422)"
-                reason_str = " | ".join(reasons) + " -> Full Oil Replacement Required."
+                reason_str = " | ".join(reasons) + " Full Oil Replacement Required."
             elif corrosive_sulfur == "Corrosive":
                 rec_oa = "OA RECOMMENDATION: PASSIVATION OR RECLAIMING REQUIRED (IEC 60422)"
-                reason_str = "Corrosive Sulphur detected -> Risk of copper sulfide deposition."
+                reason_str = "Corrosive Sulphur detected. Risk of copper sulfide deposition."
             else:
                 reclaim_reasons = []
                 if acid_v >= 0.15: reclaim_reasons.append(f"Acid elevated ({acid_v:.2f} mgKOH/g >= 0.15 Limit)")
@@ -656,7 +640,7 @@ def calculate_prognosis_and_prediction(df_raw):
 
                 if reclaim_reasons:
                     rec_oa = "OA RECOMMENDATION: OIL RECLAIMING REQUIRED (FULLER'S EARTH)"
-                    reason_str = " | ".join(reclaim_reasons) + " -> Fuller's Earth Adsorption needed."
+                    reason_str = " | ".join(reclaim_reasons) + " Fuller's Earth Adsorption needed."
                 else:
                     recond_reasons = []
                     if 0 < bdv_v < 40: recond_reasons.append(f"Breakdown Voltage low ({bdv_v:.1f} kV < 40 Limit)")
@@ -664,7 +648,7 @@ def calculate_prognosis_and_prediction(df_raw):
 
                     if recond_reasons:
                         rec_oa = "OA RECOMMENDATION: OIL RECONDITIONING REQUIRED (FILTRATION)"
-                        reason_str = " | ".join(recond_reasons) + " -> Vacuum Dehydration & Filtration needed."
+                        reason_str = " | ".join(recond_reasons) + " Vacuum Dehydration & Filtration needed."
                     else:
                         rec_oa = "OA STATUS: NORMAL OPERATIONAL CONDITION (IEC 60422)"
                         reason_str = "All active oil parameters within normal limits (Category C)."
@@ -796,22 +780,22 @@ with tab_input:
     else:
         if st.session_state.get('pending_data') is not None:
             st.error(f"**INPUT ANOMALY DETECTED:**\n\n{st.session_state.get('anomaly_reason')}")
-            st.warning("Nilai yang diinput melebihi ambang batas fisik/operasional. Silakan pilih tindakan:")
+            st.warning("Input values exceed physical/operational thresholds. Please select an action:")
 
             col_c1, col_c2 = st.columns(2)
-            if col_c1.button("Force Save Data (Simpan Paksa)", type="primary"):
+            if col_c1.button("Force Save Data", type="primary"):
                 p_data = st.session_state['pending_data']
                 p_data['Is_Anomali'] = 'Yes'
                 insert_data(p_data)
                 st.session_state['pending_data'] = None
                 st.session_state['anomaly_reason'] = None
-                st.success("Data anomali berhasil disimpan secara paksa.")
+                st.success("Anomalous data forcibly committed to database.")
                 st.rerun()
 
-            if col_c2.button("Cancel Operation (Batalkan)"):
+            if col_c2.button("Cancel Operation"):
                 st.session_state['pending_data'] = None
                 st.session_state['anomaly_reason'] = None
-                st.info("Input dibatalkan.")
+                st.info("Input operation cancelled.")
                 st.rerun()
 
         else:
@@ -943,13 +927,12 @@ with tab_insights:
     if not df_all.empty:
         df_prog_insight = calculate_prognosis_and_prediction(df_all)
         insight_trafo = st.selectbox("SELECT TRANSFORMER UNIT", df_prog_insight['ID_Trafo'].unique())
-        df_insight_filtered = df_prog_insight[(df_prog_insight['ID_Trafo'] == insight_trafo) & (df_prog_insight['Tipe_Data'] == 'Historis')].sort_values('Tanggal_Uji').reset_index(drop=True)
+        df_insight_filtered = df_prog_insight[(df_prog_insight['ID_Trafo'] == insight_trafo) & (df_prog_insight['Tipe_Data'] == 'Historical')].sort_values('Tanggal_Uji').reset_index(drop=True)
 
         if not df_insight_filtered.empty:
             latest_record = df_insight_filtered.iloc[-1]
             meta_match = df_metadata[df_metadata['ID_Trafo'] == insight_trafo]
             
-            # Pengecekan keamanan metadata
             if not meta_match.empty and pd.notna(meta_match.iloc[0].get('Year_Manufactured')):
                 y_manuf = meta_match.iloc[0]['Year_Manufactured']
                 curr_year = pd.to_datetime(latest_record['Tanggal_Uji']).year
@@ -966,9 +949,8 @@ with tab_insights:
 
 with tab_trend:
     ui.render_title("HMI GAS DYNAMICS & INSTRUMENT GAUGES")
-    # Guard untuk pangkalan data kosong
     if df_all.empty:
-        st.info("Belum ada data uji untuk trafo.")
+        st.info("No test data available for the selected transformer.")
     else:
         trafo_filter = st.selectbox("SELECT TRANSFORMER UNIT", df_all['ID_Trafo'].unique(), key="trend_selector")
         df_graph = calculate_prognosis_and_prediction(df_all)
@@ -976,7 +958,7 @@ with tab_trend:
 
         fig_gas = go.Figure()
         gas_list, colors = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2'], ['#38BDF8', '#F59E0B', '#10B981', '#EF4444', '#A855F7']
-        df_hist_only = df_filtered[df_filtered['Tipe_Data'] == 'Historis']
+        df_hist_only = df_filtered[df_filtered['Tipe_Data'] == 'Historical']
         last_hist_date = df_hist_only['Tanggal_Uji'].iloc[-1] if not df_hist_only.empty else None
 
         for idx_g, gas in enumerate(gas_list):
@@ -1026,14 +1008,13 @@ with tab_trend:
 with tab_duval:
     ui.render_title("DUVAL TRIANGLE 1 DIAGNOSTIC PANEL (IEEE C57.104 / IEC 60599)")
 
-    # Guard untuk pangkalan data kosong
     if df_all.empty:
-        st.info("Belum ada data uji untuk trafo.")
+        st.info("No test data available for the selected transformer.")
     else:
         df_duval = calculate_prognosis_and_prediction(df_all)
         duval_trafo = st.selectbox("SELECT TRANSFORMER UNIT", df_duval['ID_Trafo'].unique(), key="duval_selector")
 
-        df_d_filtered = df_duval[(df_duval['ID_Trafo'] == duval_trafo) & (df_duval['Tipe_Data'] == 'Historis')].sort_values('Tanggal_Uji').reset_index(drop=True)
+        df_d_filtered = df_duval[(df_duval['ID_Trafo'] == duval_trafo) & (df_duval['Tipe_Data'] == 'Historical')].sort_values('Tanggal_Uji').reset_index(drop=True)
 
         if not df_d_filtered.empty:
             latest_d = df_d_filtered.iloc[-1]
@@ -1041,10 +1022,10 @@ with tab_duval:
 
             if current_ieee_status == "Status 1":
                 st.info(f"**DUVAL TRIANGLE INACTIVE FOR {duval_trafo}**\n\n"
-                        f"Berdasarkan standar IEEE C57.104, analisis Segitiga Duval hanya berlaku apabila konsentrasi gas melampaui batas normal.\n\n"
-                        f"- **Status IEEE Terbaru ({latest_d.get('Tanggal_Uji')}):** `{current_ieee_status}` (Normal Condition)\n"
+                        f"According to IEEE C57.104 standards, Duval Triangle analysis is only applicable when gas concentrations exceed normal operating thresholds.\n\n"
+                        f"- **Latest IEEE Status ({latest_d.get('Tanggal_Uji')}):** `{current_ieee_status}` (Normal Condition)\n"
                         f"- **Physics Fault Verdict:** `{latest_d.get('Status_DGA')}`\n\n"
-                        f"*Segitiga Duval akan otomatis dirender jika kondisi DGA trafo memasuki Status 2 (Caution) atau Status 3 (Fault).*")
+                        f"*The Duval Triangle plot will automatically render if the transformer condition escalates to Status 2 (Caution) or Status 3 (Fault).*")
             else:
                 c_ch4 = float(latest_d.get('CH4', 0)) if pd.notna(latest_d.get('CH4')) else 0.0
                 c_c2h4 = float(latest_d.get('C2H4', 0)) if pd.notna(latest_d.get('C2H4')) else 0.0
