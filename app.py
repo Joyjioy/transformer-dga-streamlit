@@ -277,15 +277,42 @@ def get_ieee_thresholds(o2_n2_ratio, age_years, period_months=12):
 
 def get_duval_minimum(ch4, c2h4, c2h2):
     total = ch4 + c2h4 + c2h2
-    if total == 0: return "Normal"
-    p_ch4, p_c2h4, p_c2h2 = (ch4 / total) * 100, (c2h4 / total) * 100, (c2h2 / total) * 100
+    if total == 0: 
+        return "Normal"
+    p_ch4 = (ch4 / total) * 100
+    p_c2h4 = (c2h4 / total) * 100
+    p_c2h2 = (c2h2 / total) * 100
+
+    # 1. Partial Discharge (PD)
+    if p_ch4 >= 98:
+        return "PD"
+    
+    # 2. Zone T1, T2, T3 (Thermal Faults - Tanpa C2H2 signifikan)
     if p_c2h2 < 4:
-        if p_c2h4 >= 38: return "T3"
-        elif 23 <= p_c2h4 < 38: return "T2"
-        return "T1"
-    elif p_c2h2 >= 29 or (p_c2h2 >= 4 and p_c2h4 >= 23): return "D2"
-    elif p_c2h2 >= 13 and p_c2h4 < 23: return "D1"
-    return "T1"
+        if p_c2h4 < 20:
+            return "T1"
+        elif 20 <= p_c2h4 < 50:
+            return "T2"
+        else:
+            return "T3"
+            
+    # 3. Zone D1, D2, DT (Discharges & Mixed Faults)
+    if p_c2h4 < 23:
+        if p_c2h2 >= 13:
+            return "D1"
+        else:
+            return "T1"
+    else:
+        if p_c2h2 >= 29:
+            return "D2"
+        elif 4 <= p_c2h2 < 29:
+            if p_c2h4 >= 50 and p_c2h2 < 15:
+                return "T3"
+            elif 40 <= p_c2h4 < 71 and p_c2h2 >= 15:
+                return "D2"
+            else:
+                return "DT"
+    return "DT"
 
 def get_severity_score(label):
     s = str(label).upper()
