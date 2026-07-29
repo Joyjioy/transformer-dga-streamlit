@@ -28,89 +28,6 @@ CSV_SEED_FILE = "Data_Uji_Trafo.csv"
 CSV_NAMEPLATE_FILE = "Nameplate_Trafo.csv"
 JALUR_MODEL_LOKAL = 'model_dga_7classes_v2.pkl'
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tabel_trafo_metadata (
-            ID_Trafo TEXT PRIMARY KEY,
-            Manufacturer TEXT, Serial_Number TEXT, Year_Manufactured INTEGER,
-            Model_Type TEXT, Capacity_MVA REAL, Phase_Count INTEGER,
-            Nominal_Voltage_kV TEXT, Nominal_Current_A TEXT, Frequency_Hz REAL,
-            Vector_Group TEXT, Impedance_Pct REAL
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tabel_master (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ID_Trafo TEXT NOT NULL, Tanggal_Uji TEXT NOT NULL,
-            H2 REAL, CH4 REAL, C2H6 REAL, C2H4 REAL, C2H2 REAL, CO REAL, CO2 REAL, Ratio_O2_N2 REAL,
-            BDV REAL, Acid REAL, Water REAL, IFT REAL, DDF REAL, Resistivity REAL, Colour_ISO2049 REAL,
-            Sediment_Sludge TEXT, Corrosive_Sulphur TEXT, Particles_ISO TEXT,
-            Inhibitor_Content REAL, Passivator_Content REAL, Flash_Point REAL, PCB_Content REAL,
-            Status_Pemurnian TEXT, Is_Anomali TEXT DEFAULT 'No'
-        )
-    """)
-    conn.commit()
-
-    cursor.execute("SELECT COUNT(*) FROM tabel_trafo_metadata")
-    if cursor.fetchone()[0] == 0 and os.path.exists(CSV_NAMEPLATE_FILE):
-        df_meta_csv = pd.read_csv(CSV_NAMEPLATE_FILE)
-        meta_records = []
-        for _, row in df_meta_csv.iterrows():
-            meta_records.append((
-                str(row['ID_Trafo']), str(row['Manufacturer']), str(row['Serial_Number']),
-                int(row['Year_Manufactured']), str(row['Model_Type']), float(row['Capacity_MVA']),
-                int(row['Phase_Count']), str(row['Nominal_Voltage_kV']), str(row['Nominal_Current_A']),
-                float(row['Frequency_Hz']), str(row['Vector_Group']), float(row['Impedance_Pct'])
-            ))
-        cursor.executemany("""
-            INSERT OR IGNORE INTO tabel_trafo_metadata VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, meta_records)
-        conn.commit()
-
-    cursor.execute("SELECT COUNT(*) FROM tabel_master")
-    if cursor.fetchone()[0] == 0 and os.path.exists(CSV_SEED_FILE):
-        df_csv = pd.read_csv(CSV_SEED_FILE)
-        df_csv['Tanggal_Uji'] = pd.to_datetime(df_csv['Tanggal_Uji']).dt.strftime('%Y-%m-%d')
-        df_csv['Status_Pemurnian'] = df_csv['Status_Pemurnian'].fillna('Normal')
-        df_csv['Is_Anomali'] = 'No'
-        df_csv = df_csv.replace({np.nan: None})
-
-        for _, row in df_csv.iterrows():
-            data_dict = {
-                'ID_Trafo': str(row['ID_Trafo']), 'Tanggal_Uji': str(row['Tanggal_Uji']),
-                'H2': float(row['H2']) if pd.notna(row.get('H2')) else None,
-                'CH4': float(row['CH4']) if pd.notna(row.get('CH4')) else None,
-                'C2H6': float(row['C2H6']) if pd.notna(row.get('C2H6')) else None,
-                'C2H4': float(row['C2H4']) if pd.notna(row.get('C2H4')) else None,
-                'C2H2': float(row['C2H2']) if pd.notna(row.get('C2H2')) else None,
-                'CO': float(row['CO']) if pd.notna(row.get('CO')) else None,
-                'CO2': float(row['CO2']) if pd.notna(row.get('CO2')) else None,
-                'Ratio_O2_N2': float(row['Ratio_O2_N2']) if pd.notna(row.get('Ratio_O2_N2')) else None,
-                'BDV': float(row['BDV']) if pd.notna(row.get('BDV')) else None,
-                'Acid': float(row['Acid']) if pd.notna(row.get('Acid')) else None,
-                'Water': float(row['Water']) if pd.notna(row.get('Water')) else None,
-                'IFT': float(row['IFT']) if pd.notna(row.get('IFT')) else None,
-                'DDF': float(row['DDF']) if pd.notna(row.get('DDF')) else None,
-                'Resistivity': float(row['Resistivity']) if pd.notna(row.get('Resistivity')) else None,
-                'Colour_ISO2049': float(row['Colour_ISO2049']) if pd.notna(row.get('Colour_ISO2049')) else None,
-                'Sediment_Sludge': str(row.get('Sediment_Sludge')) if pd.notna(row.get('Sediment_Sludge')) else None,
-                'Corrosive_Sulphur': str(row.get('Corrosive_Sulphur')) if pd.notna(row.get('Corrosive_Sulphur')) else None,
-                'Particles_ISO': str(row.get('Particles_ISO')) if pd.notna(row.get('Particles_ISO')) else None,
-                'Inhibitor_Content': float(row['Inhibitor_Content']) if pd.notna(row.get('Inhibitor_Content')) else None,
-                'Passivator_Content': float(row['Passivator_Content']) if pd.notna(row.get('Passivator_Content')) else None,
-                'Flash_Point': float(row['Flash_Point']) if pd.notna(row.get('Flash_Point')) else None,
-                'PCB_Content': float(row['PCB_Content']) if pd.notna(row.get('PCB_Content')) else None,
-                'Status_Pemurnian': str(row['Status_Pemurnian']),
-                'Is_Anomali': str(row['Is_Anomali'])
-            }
-            insert_data(data_dict)
-
-    conn.close()
-
 def load_data():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM tabel_master ORDER BY Tanggal_Uji ASC", conn)
@@ -160,8 +77,6 @@ def delete_data(record_id):
     cursor.execute("DELETE FROM tabel_master WHERE id = ?", (record_id,))
     conn.commit()
     conn.close()
-
-init_db()
 
 def check_anomaly(df_history, trafo_id, input_date, input_data):
     if df_history.empty:
@@ -232,6 +147,102 @@ def check_anomaly(df_history, trafo_id, input_date, input_data):
                 return True, "Monthly Gas Growth Rate exceeds acceptable thresholds:\n- " + "\n- ".join(rate_details)
 
     return False, "Normal"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tabel_trafo_metadata (
+            ID_Trafo TEXT PRIMARY KEY,
+            Manufacturer TEXT, Serial_Number TEXT, Year_Manufactured INTEGER,
+            Model_Type TEXT, Capacity_MVA REAL, Phase_Count INTEGER,
+            Nominal_Voltage_kV TEXT, Nominal_Current_A TEXT, Frequency_Hz REAL,
+            Vector_Group TEXT, Impedance_Pct REAL
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tabel_master (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ID_Trafo TEXT NOT NULL, Tanggal_Uji TEXT NOT NULL,
+            H2 REAL, CH4 REAL, C2H6 REAL, C2H4 REAL, C2H2 REAL, CO REAL, CO2 REAL, Ratio_O2_N2 REAL,
+            BDV REAL, Acid REAL, Water REAL, IFT REAL, DDF REAL, Resistivity REAL, Colour_ISO2049 REAL,
+            Sediment_Sludge TEXT, Corrosive_Sulphur TEXT, Particles_ISO TEXT,
+            Inhibitor_Content REAL, Passivator_Content REAL, Flash_Point REAL, PCB_Content REAL,
+            Status_Pemurnian TEXT, Is_Anomali TEXT DEFAULT 'No'
+        )
+    """)
+    conn.commit()
+
+    cursor.execute("SELECT COUNT(*) FROM tabel_trafo_metadata")
+    if cursor.fetchone()[0] == 0 and os.path.exists(CSV_NAMEPLATE_FILE):
+        df_meta_csv = pd.read_csv(CSV_NAMEPLATE_FILE)
+        meta_records = []
+        for _, row in df_meta_csv.iterrows():
+            meta_records.append((
+                str(row['ID_Trafo']), str(row['Manufacturer']), str(row['Serial_Number']),
+                int(row['Year_Manufactured']), str(row['Model_Type']), float(row['Capacity_MVA']),
+                int(row['Phase_Count']), str(row['Nominal_Voltage_kV']), str(row['Nominal_Current_A']),
+                float(row['Frequency_Hz']), str(row['Vector_Group']), float(row['Impedance_Pct'])
+            ))
+        cursor.executemany("""
+            INSERT OR IGNORE INTO tabel_trafo_metadata VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, meta_records)
+        conn.commit()
+
+    cursor.execute("SELECT COUNT(*) FROM tabel_master")
+    if cursor.fetchone()[0] == 0 and os.path.exists(CSV_SEED_FILE):
+        df_csv = pd.read_csv(CSV_SEED_FILE)
+        df_csv['Tanggal_Uji'] = pd.to_datetime(df_csv['Tanggal_Uji']).dt.strftime('%Y-%m-%d')
+        df_csv['Status_Pemurnian'] = df_csv['Status_Pemurnian'].fillna('Normal')
+        df_csv = df_csv.replace({np.nan: None})
+
+        df_csv['Tanggal_Uji_DT'] = pd.to_datetime(df_csv['Tanggal_Uji'])
+        df_csv = df_csv.sort_values(['ID_Trafo', 'Tanggal_Uji_DT']).reset_index(drop=True)
+
+        for _, row in df_csv.iterrows():
+            trafo_id_str = str(row['ID_Trafo'])
+            tgl_str = str(row['Tanggal_Uji'])
+            
+            data_dict = {
+                'ID_Trafo': trafo_id_str, 'Tanggal_Uji': tgl_str,
+                'H2': float(row['H2']) if pd.notna(row.get('H2')) else None,
+                'CH4': float(row['CH4']) if pd.notna(row.get('CH4')) else None,
+                'C2H6': float(row['C2H6']) if pd.notna(row.get('C2H6')) else None,
+                'C2H4': float(row['C2H4']) if pd.notna(row.get('C2H4')) else None,
+                'C2H2': float(row['C2H2']) if pd.notna(row.get('C2H2')) else None,
+                'CO': float(row['CO']) if pd.notna(row.get('CO')) else None,
+                'CO2': float(row['CO2']) if pd.notna(row.get('CO2')) else None,
+                'Ratio_O2_N2': float(row['Ratio_O2_N2']) if pd.notna(row.get('Ratio_O2_N2')) else None,
+                'BDV': float(row['BDV']) if pd.notna(row.get('BDV')) else None,
+                'Acid': float(row['Acid']) if pd.notna(row.get('Acid')) else None,
+                'Water': float(row['Water']) if pd.notna(row.get('Water')) else None,
+                'IFT': float(row['IFT']) if pd.notna(row.get('IFT')) else None,
+                'DDF': float(row['DDF']) if pd.notna(row.get('DDF')) else None,
+                'Resistivity': float(row['Resistivity']) if pd.notna(row.get('Resistivity')) else None,
+                'Colour_ISO2049': float(row['Colour_ISO2049']) if pd.notna(row.get('Colour_ISO2049')) else None,
+                'Sediment_Sludge': str(row.get('Sediment_Sludge')) if pd.notna(row.get('Sediment_Sludge')) else None,
+                'Corrosive_Sulphur': str(row.get('Corrosive_Sulphur')) if pd.notna(row.get('Corrosive_Sulphur')) else None,
+                'Particles_ISO': str(row.get('Particles_ISO')) if pd.notna(row.get('Particles_ISO')) else None,
+                'Inhibitor_Content': float(row['Inhibitor_Content']) if pd.notna(row.get('Inhibitor_Content')) else None,
+                'Passivator_Content': float(row['Passivator_Content']) if pd.notna(row.get('Passivator_Content')) else None,
+                'Flash_Point': float(row['Flash_Point']) if pd.notna(row.get('Flash_Point')) else None,
+                'PCB_Content': float(row['PCB_Content']) if pd.notna(row.get('PCB_Content')) else None,
+                'Status_Pemurnian': str(row['Status_Pemurnian']),
+                'Is_Anomali': 'No'
+            }
+
+            df_curr_db = load_data()
+            has_anom, _ = check_anomaly(df_curr_db, trafo_id_str, pd.to_datetime(tgl_str), data_dict)
+            if has_anom:
+                data_dict['Is_Anomali'] = 'Suspect'
+
+            insert_data(data_dict)
+
+    conn.close()
+
+init_db()
 
 def get_ieee_thresholds(o2_n2_ratio, age_years, period_months=12):
     is_sealed = (o2_n2_ratio is not None and o2_n2_ratio <= 0.2)
@@ -326,17 +337,23 @@ def create_hmi_gauge(val, title, min_val, max_val, steps_config):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=val,
+        domain={'x': [0, 1], 'y': [0, 1]},  # FIX: Mengunci angka di tengah container
         title={'text': title, 'font': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 13}},
-        number={'font': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 28}},
+        number={'font': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 24}},
         gauge={
-            'axis': {'range': [min_val, max_val], 'tickfont': {'family': 'IBM Plex Mono', 'color': '#475569', 'size': 10}},
+            'axis': {'range': [min_val, max_val], 'tickfont': {'family': 'IBM Plex Mono', 'color': '#0F172A', 'size': 10}},
             'bar': {'color': "#0F172A", 'thickness': 0.25},
             'bgcolor': "#FFFFFF",
             'bordercolor': "#CBD5E1",
             'steps': steps_config
         }
     ))
-    fig.update_layout(height=230, paper_bgcolor="#FFFFFF", margin=dict(l=25, r=25, t=50, b=20))
+    fig.update_layout(
+        height=220, 
+        paper_bgcolor="#FFFFFF", 
+        margin=dict(l=30, r=30, t=40, b=20),
+        autosize=True
+    )
     return fig
 
 def plot_duval_triangle1(ch4, c2h4, c2h2, trafo_id):
@@ -392,15 +409,33 @@ def plot_duval_triangle1(ch4, c2h4, c2h2, trafo_id):
     fig.update_layout({
         'ternary': {
             'sum': 100,
-            'aaxis': {'title': {'text': '% CH4', 'font': {'color': '#0F172A', 'size': 13}}, 'min': 0, 'linewidth': 2, 'ticks': 'outside'},
-            'baxis': {'title': {'text': '% C2H2', 'font': {'color': '#0F172A', 'size': 13}}, 'min': 0, 'linewidth': 2, 'ticks': 'outside'},
-            'caxis': {'title': {'text': '% C2H4', 'font': {'color': '#0F172A', 'size': 13}}, 'min': 0, 'linewidth': 2, 'ticks': 'outside'},
+            'aaxis': {
+                'title': {'text': '% CH4', 'font': {'color': '#0F172A', 'size': 13}}, 
+                'tickfont': {'color': '#0F172A', 'size': 10},
+                'min': 0, 'linewidth': 2, 'ticks': 'outside'
+            },
+            'baxis': {
+                'title': {'text': '% C2H2', 'font': {'color': '#0F172A', 'size': 13}}, 
+                'tickfont': {'color': '#0F172A', 'size': 10},
+                'min': 0, 'linewidth': 2, 'ticks': 'outside'
+            },
+            'caxis': {
+                'title': {'text': '% C2H4', 'font': {'color': '#0F172A', 'size': 13}}, 
+                'tickfont': {'color': '#0F172A', 'size': 10},
+                'min': 0, 'linewidth': 2, 'ticks': 'outside'
+            },
             'bgcolor': '#FFFFFF'
         },
         'paper_bgcolor': '#FFFFFF',
+        'font': {'color': '#0F172A', 'family': 'IBM Plex Mono'}, # FIX: Mengunci warna font global Plotly ke gelap
         'title': dict(text=f"DUVAL TRIANGLE 1 FAULT GEOMETRY MAP — {trafo_id}", font=dict(family="IBM Plex Mono", color="#0F172A", size=14)),
         'height': 600, 'margin': dict(l=40, r=40, t=50, b=40),
-        'legend': dict(orientation="h", y=-0.1, x=0.05)
+        'legend': dict(
+            orientation="h", 
+            y=-0.1, 
+            x=0.05,
+            font=dict(color="#0F172A", size=11, family="IBM Plex Mono") # FIX: Mengunci warna legenda ke gelap
+        )
     })
 
     return fig, p_ch4, p_c2h4, p_c2h2
@@ -408,7 +443,7 @@ def plot_duval_triangle1(ch4, c2h4, c2h2, trafo_id):
 def calculate_prognosis_and_prediction(df_raw):
     """
     Evaluates Transformer Health Index strictly using:
-    - IEEE C57.104-2019 (DGA Thresholds & Status)
+    - IEEE C57.104-2019 (DGA Thresholds, Rates & Status)
     - IEC 60599 (Duval Triangle 1 Fault Diagnosis)
     - IEC 60422 Category C (Oil Analysis Parameters)
     - IEEE C57.152-2013 (Field Operational Actions)
@@ -420,7 +455,6 @@ def calculate_prognosis_and_prediction(df_raw):
     df = df_raw.copy()
     df_meta = load_metadata()
 
-    # 1. Standardize Purification Status (Strictly 3 Actions + Normal)
     if 'Status_Pemurnian' not in df.columns:
         df['Status_Pemurnian'] = 'Normal'
     
@@ -430,6 +464,10 @@ def calculate_prognosis_and_prediction(df_raw):
         'None': 'Normal', 
         '': 'Normal'
     })
+
+    if 'Is_Anomali' not in df.columns:
+        df['Is_Anomali'] = 'No'
+    df['Is_Anomali'] = df['Is_Anomali'].fillna('No').astype(str).str.strip()
 
     df['Tanggal_Uji_DT'] = pd.to_datetime(df['Tanggal_Uji'], errors='coerce')
     df = df.sort_values(['ID_Trafo', 'Tanggal_Uji_DT']).reset_index(drop=True)
@@ -464,14 +502,77 @@ def calculate_prognosis_and_prediction(df_raw):
         if col in df.columns:
             df[col] = df.groupby(['ID_Trafo', 'Era_Pemurnian'])[col].ffill()
 
-    df = df.drop(columns=['Is_Purification_Event', 'Era_Pemurnian'], errors='ignore')
+    # --------------------------------------------------------------------------
+    # A. MULTI-GAS V-SPIKE AUTO-DETECTION & RETROSPECTIVE EVALUATION (FIXED BUG)
+    # --------------------------------------------------------------------------
+    primary_eval_gases = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']
+    for trafo_id in df['ID_Trafo'].unique():
+        t_indices = df[df['ID_Trafo'] == trafo_id].index.tolist()
+        
+        # 1. Deteksi V-Spike multi-gas untuk data historis
+        for i in range(1, len(t_indices) - 1):
+            p_idx, c_idx, n_idx = t_indices[i-1], t_indices[i], t_indices[i+1]
+            if df.loc[p_idx, 'Era_Pemurnian'] == df.loc[c_idx, 'Era_Pemurnian'] == df.loc[n_idx, 'Era_Pemurnian']:
+                is_any_gas_spike = False
+                for g in primary_eval_gases:
+                    val_p = df.loc[p_idx, g] if pd.notna(df.loc[p_idx, g]) else 0.0
+                    val_c = df.loc[c_idx, g] if pd.notna(df.loc[c_idx, g]) else 0.0
+                    val_n = df.loc[n_idx, g] if pd.notna(df.loc[n_idx, g]) else 0.0
+                    
+                    if (val_c > 15.0) and (val_c > max(val_p, 1.0) * 2.5) and (val_n < val_c * 0.5):
+                        is_any_gas_spike = True
+                        break
+                
+                if is_any_gas_spike:
+                    df.loc[c_idx, 'Is_Anomali'] = 'Outlier'
 
+        # 2. Evaluasi retrospektif data berstatus 'Suspect' (Termasuk Penanganan t+1 Anomali)
+        for i in range(len(t_indices)):
+            curr_idx = t_indices[i]
+            curr_status = str(df.loc[curr_idx, 'Is_Anomali']).strip()
+            
+            if curr_status == 'Yes':
+                curr_status = 'Suspect'
+                df.loc[curr_idx, 'Is_Anomali'] = 'Suspect'
+
+            if curr_status == 'Suspect' and i < len(t_indices) - 1:
+                next_idx = t_indices[i + 1]
+                if df.loc[curr_idx, 'Era_Pemurnian'] == df.loc[next_idx, 'Era_Pemurnian']:
+                    next_row_dict = df.loc[next_idx].to_dict()
+                    next_date = df.loc[next_idx, 'Tanggal_Uji_DT']
+                    sub_hist = df.loc[t_indices[:i+1]].copy()
+                    
+                    is_next_anomalous, _ = check_anomaly(sub_hist, trafo_id, next_date, next_row_dict)
+                    
+                    if not is_next_anomalous:
+                        is_sustained = True
+                        for g in primary_eval_gases:
+                            val_curr = df.loc[curr_idx, g] if pd.notna(df.loc[curr_idx, g]) else 0.0
+                            val_next = df.loc[next_idx, g] if pd.notna(df.loc[next_idx, g]) else 0.0
+                            if val_curr > 15.0 and val_next < (val_curr * 0.85):
+                                is_sustained = False
+                                break
+                        
+                        if is_sustained:
+                            df.loc[curr_idx, 'Is_Anomali'] = 'No'
+                            df.loc[next_idx, 'Is_Anomali'] = 'No'
+                        else:
+                            df.loc[curr_idx, 'Is_Anomali'] = 'Outlier'
+                            df.loc[next_idx, 'Is_Anomali'] = 'No'
+                    else:
+                        # PENANGANAN BUG SKENARIO 3:
+                        # Jika t+1 juga terdeteksi anomali (tetap tinggi/meloncat baru),
+                        # maka t terbukti BUKAN outlier -> pulihkan status t menjadi 'No' (Clean).
+                        df.loc[curr_idx, 'Is_Anomali'] = 'No'
+
+    # --------------------------------------------------------------------------
+    # B. ARIMA TIME-SERIES ENGINE
+    # --------------------------------------------------------------------------
     forecast_columns = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']
     all_7_gases = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2']
     prediction_steps = 6
     final_results = []
 
-    # 2. ARIMA Time-Series Prognosis Engine
     for trafo in df['ID_Trafo'].unique():
         df_trafo = df[df['ID_Trafo'] == trafo].copy()
         df_trafo['Tipe_Data'] = 'Historical'
@@ -480,8 +581,12 @@ def calculate_prognosis_and_prediction(df_raw):
         last_time_dt = df_trafo['Tanggal_Uji_DT'].iloc[-1]
         last_data = df_trafo.iloc[-1].copy()
 
+        df_clean_only = df_trafo[df_trafo['Is_Anomali'] == 'No'].copy()
+        if df_clean_only.empty:
+            df_clean_only = df_trafo.copy()
+
         two_years_ago = last_time_dt - relativedelta(years=2)
-        df_temporal = df_trafo[df_trafo['Tanggal_Uji_DT'] >= two_years_ago].copy()
+        df_temporal = df_clean_only[df_clean_only['Tanggal_Uji_DT'] >= two_years_ago].copy()
 
         purification_idx = df_temporal[df_temporal['Status_Pemurnian'].isin(['Oil Replacement', 'Reclaiming', 'Reconditioning'])].index
 
@@ -501,7 +606,7 @@ def calculate_prognosis_and_prediction(df_raw):
         prediction_dates = [(last_time_dt + relativedelta(months=i+1)).strftime('%Y-%m-%d') for i in range(prediction_steps)]
 
         for col in forecast_columns:
-            ts_series = data_train_arima[col].ffill().bfill()
+            ts_series = data_train_arima[col].ffill().bfill() if not data_train_arima.empty else pd.Series([0.0])
             time_series = ts_series.values if not ts_series.empty else np.array([0.0])
 
             if freeze_mode or len(time_series) < 3:
@@ -523,6 +628,7 @@ def calculate_prognosis_and_prediction(df_raw):
             new_row['Tanggal_Uji_DT'] = pd.to_datetime(prediction_dates[i])
             new_row['Tipe_Data'] = 'Forecast'
             new_row['Status_Pemurnian'] = np.nan
+            new_row['Is_Anomali'] = 'No'
             for col in forecast_columns:
                 new_row[col] = round(future_predictions[col][i], 2)
             df_trafo_prediction_list.append(new_row)
@@ -550,9 +656,13 @@ def calculate_prognosis_and_prediction(df_raw):
 
     trafo_freeze_status = {}
 
-    # 3. Diagnostic Execution Loop
+    # --------------------------------------------------------------------------
+    # C. DIAGNOSTIC EXECUTION LOOP
+    # --------------------------------------------------------------------------
     for idx, row in df_master.iterrows():
         trafo_id = row['ID_Trafo']
+        current_era = row['Era_Pemurnian']
+        data_state = str(row.get('Is_Anomali', 'No')).strip()
         meta_match = df_meta[df_meta['ID_Trafo'] == trafo_id]
         calculated_age = (row['Tanggal_Uji_DT'].year - meta_match.iloc[0]['Year_Manufactured']) if not meta_match.empty else None
 
@@ -562,11 +672,28 @@ def calculate_prognosis_and_prediction(df_raw):
 
         t1_limits, t2_limits, t3_delta_limits, t4_rate_limits = get_ieee_thresholds(o2_n2_ratio, calculated_age)
 
+        sub_era_df = df_master[
+            (df_master['ID_Trafo'] == trafo_id) & 
+            (df_master['Era_Pemurnian'] == current_era) & 
+            (df_master['Is_Anomali'] == 'No') &
+            (df_master['Tipe_Data'] == 'Historical') &
+            (df_master['Tanggal_Uji_DT'] <= row['Tanggal_Uji_DT'])
+        ].sort_values('Tanggal_Uji_DT')
+
+        records_count = len(sub_era_df)
+        if records_count >= 2:
+            first_date = sub_era_df['Tanggal_Uji_DT'].iloc[0]
+            months_span = (row['Tanggal_Uji_DT'].year - first_date.year) * 12 + (row['Tanggal_Uji_DT'].month - first_date.month)
+        else:
+            months_span = 0
+
+        is_data_qualified = (records_count >= 3) and (months_span >= 4)
+
         exceed_t1_any = any((pd.notna(row[g]) and row[g] > t1_limits[g]) for g in all_7_gases if g in row)
         exceed_t2_any = any((pd.notna(row[g]) and row[g] > t2_limits[g]) for g in all_7_gases if g in row)
 
         is_rates_anomali = False
-        if idx > 0 and df_master.loc[idx, 'ID_Trafo'] == df_master.loc[idx-1, 'ID_Trafo']:
+        if idx > 0 and df_master.loc[idx, 'ID_Trafo'] == df_master.loc[idx-1, 'ID_Trafo'] and df_master.loc[idx, 'Era_Pemurnian'] == df_master.loc[idx-1, 'Era_Pemurnian']:
             days_diff = (row['Tanggal_Uji_DT'] - df_master.loc[idx-1, 'Tanggal_Uji_DT']).days
             if days_diff > 0:
                 for g in all_7_gases:
@@ -576,22 +703,30 @@ def calculate_prognosis_and_prediction(df_raw):
                         if (g == 'C2H2' and diff_ppm >= 0.5) or (g != 'C2H2' and diff_ppm > t3_delta_limits[g]) or (annual_rate > t4_rate_limits[g]):
                             is_rates_anomali = True
 
-        # A. Evaluasi IEEE C57.104 DGA Status & Duval Fault Mapping
-        if not exceed_t1_any and not is_rates_anomali and not exceed_t2_any:
+        if data_state == 'Suspect':
+            status_ieee = "Status 3 (Suspect)"
+            status_dga_final = "Awaiting Retrospective Verification (Suspect Data)"
+        elif data_state == 'Outlier':
+            status_ieee = "Status 1 (Outlier Excluded)"
+            status_dga_final = "Outlier Excluded (V-Spike Lab Error)"
+        elif not exceed_t1_any and not is_rates_anomali and not exceed_t2_any:
             status_ieee, status_dga_final = "Status 1", "Normal"
         elif exceed_t2_any or is_rates_anomali:
             status_ieee = "Status 3"
-            c_ch4 = row['CH4'] if pd.notna(row['CH4']) else 0.0
-            c_c2h4 = row['C2H4'] if pd.notna(row['C2H4']) else 0.0
-            c_c2h2 = row['C2H2'] if pd.notna(row['C2H2']) else 0.0
-            status_dga_final = get_duval_minimum(c_ch4, c_c2h4, c_c2h2)
+            if is_data_qualified:
+                c_ch4 = row['CH4'] if pd.notna(row['CH4']) else 0.0
+                c_c2h4 = row['C2H4'] if pd.notna(row['C2H4']) else 0.0
+                c_c2h2 = row['C2H2'] if pd.notna(row['C2H2']) else 0.0
+                status_dga_final = get_duval_minimum(c_ch4, c_c2h4, c_c2h2)
+            else:
+                status_dga_final = "Pending Trend Qualification (Req: >=3 tests & >=4 mo span)"
         else:
-            status_ieee, status_dga_final = "Status 2", "Caution"
+            status_ieee = "Status 2"
+            status_dga_final = "Caution"
 
         dga_status_ieee_list.append(status_ieee)
         status_dga_final_list.append(status_dga_final)
 
-        # B. Status Degradasi Kertas Isolasi (CO / CO2 Ratio)
         co = row['CO'] if pd.notna(row['CO']) else 0.0
         co2 = row['CO2'] if pd.notna(row['CO2']) else 0.0
         ratio_co2_co = co2 / (co + 1e-5)
@@ -602,7 +737,6 @@ def calculate_prognosis_and_prediction(df_raw):
         else:
             status_paper_list.append("Normal")
 
-        # C. Freeze Mode Check
         status_p_str = str(row.get('Status_Pemurnian', '')).strip()
         if status_p_str in ['Oil Replacement', 'Reclaiming', 'Reconditioning']:
             trafo_freeze_status[trafo_id] = row['Tanggal_Uji_DT']
@@ -620,7 +754,6 @@ def calculate_prognosis_and_prediction(df_raw):
             if len(sub_df) < 6 or umb < 4:
                 is_currently_frozen = True
 
-        # D. Evaluasi Minyak (IEC 60422 Kategori C) - HITUNG TERLEBIH DAHULU
         bdv = float(row['BDV']) if pd.notna(row['BDV']) else None
         acid = float(row['Acid']) if pd.notna(row['Acid']) else None
         water = float(row['Water']) if pd.notna(row['Water']) else None
@@ -638,59 +771,85 @@ def calculate_prognosis_and_prediction(df_raw):
             rec_oa = "DATA NOT TESTED"
             reason_str = "Insufficient oil physical parameters recorded."
         else:
-            bdv_v = bdv if bdv is not None else 0.0
+            bdv_v = bdv if bdv is not None else 999.0
             acid_v = acid if acid is not None else 0.0
             water_v = water if water is not None else 0.0
-            ift_v = ift if ift is not None else 0.0
+            ift_v = ift if ift is not None else 999.0
             ddf_v = ddf if ddf is not None else 0.0
-            res_v = resistivity if resistivity is not None else 0.0
-            col_v = colour if colour is not None else 1.0
+            res_v = resistivity if resistivity is not None else 999.0
+            col_v = colour if colour is not None else 0.0
 
-            reasons = []
-            if acid_v > 0.30: reasons.append(f"Acid Number critical ({acid_v:.2f} mgKOH/g > 0.30)")
-            if 0 < ift_v < 22: reasons.append(f"Interfacial Tension critical ({ift_v:.1f} mN/m < 22)")
-            if col_v >= 4.0: reasons.append(f"Colour Scale critical ({col_v:.1f} >= 4.0)")
-            if acid_v > 0.20 and ddf_v > 0.50 and 0 < res_v < 4: reasons.append("Severe Combined Aging Detected")
+            replacement_reasons, reclaim_reasons, recond_reasons = [], [], []
 
-            # Aksi 1: Oil Replacement (Ganti Oli)
-            if reasons:
+            if acid_v > 0.40: 
+                replacement_reasons.append(f"Acid Number extremely high ({acid_v:.2f} mgKOH/g > 0.40)")
+            if acid_v > 0.30 and ddf_v > 0.50 and res_v < 4.0:
+                replacement_reasons.append("Severe Combined Chemical Aging (Acid > 0.30, DDF > 0.50, Resistivity < 4 Gohm.m)")
+
+            if acid_v > 0.30: 
+                reclaim_reasons.append(f"Acid Number Poor ({acid_v:.2f} mgKOH/g > 0.30)")
+            elif acid_v >= 0.15: 
+                reclaim_reasons.append(f"Acid Number Fair ({acid_v:.2f} mgKOH/g >= 0.15)")
+
+            if ift_v < 22.0: 
+                reclaim_reasons.append(f"Interfacial Tension Poor ({ift_v:.1f} mN/m < 22)")
+            elif 22.0 <= ift_v <= 28.0: 
+                reclaim_reasons.append(f"Interfacial Tension Fair ({ift_v:.1f} mN/m)")
+
+            if ddf_v > 0.50:
+                reclaim_reasons.append(f"DDF/Tan Delta Poor ({ddf_v:.3f} > 0.50)")
+            elif ddf_v > 0.10: 
+                reclaim_reasons.append(f"DDF/Tan Delta Fair ({ddf_v:.3f} > 0.10)")
+
+            if res_v < 4.0:
+                reclaim_reasons.append(f"Resistivity Poor ({res_v:.1f} Gohm.m < 4)")
+            elif 4.0 <= res_v <= 60.0:
+                reclaim_reasons.append(f"Resistivity Fair ({res_v:.1f} Gohm.m <= 60)")
+
+            if col_v >= 4.0: 
+                reclaim_reasons.append(f"Oil Colour scale Poor ({col_v:.1f} >= 4.0)")
+            elif col_v > 2.0: 
+                reclaim_reasons.append(f"Oil Colour scale Fair ({col_v:.1f} > 2.0)")
+
+            if sediment_sludge in ["Sludge", "Precipitable Sludge"]: 
+                reclaim_reasons.append("Precipitable Sludge detected")
+            if corrosive_sulfur == "Corrosive": 
+                reclaim_reasons.append("Corrosive Sulphur detected")
+
+            if bdv_v < 30.0: 
+                recond_reasons.append(f"Breakdown Voltage Poor ({bdv_v:.1f} kV < 30)")
+            elif 30.0 <= bdv_v <= 40.0:
+                recond_reasons.append(f"Breakdown Voltage Fair ({bdv_v:.1f} kV [30-40])")
+
+            if water_v > 40.0: 
+                recond_reasons.append(f"Water Content Poor ({water_v:.1f} ppm > 40)")
+            elif 30.0 <= water_v <= 40.0:
+                recond_reasons.append(f"Water Content Fair ({water_v:.1f} ppm [30-40])")
+
+            if replacement_reasons:
                 rec_oa = "OIL REPLACEMENT"
-                reason_str = " | ".join(reasons)
-            # Aksi 2: Reclaiming
-            elif corrosive_sulfur == "Corrosive":
+                reason_str = " | ".join(replacement_reasons)
+            elif reclaim_reasons:
                 rec_oa = "RECLAIMING"
-                reason_str = "Corrosive Sulphur detected."
-            else:
-                reclaim_reasons = []
-                if acid_v >= 0.15: reclaim_reasons.append(f"Acid elevated ({acid_v:.2f} mgKOH/g >= 0.15)")
-                if 22 <= ift_v <= 28: reclaim_reasons.append(f"IFT degraded ({ift_v:.1f} mN/m)")
-                if ddf_v > 0.10: reclaim_reasons.append(f"DDF high ({ddf_v:.3f} > 0.10)")
-                if 0 < res_v < 60: reclaim_reasons.append(f"Resistivity low ({res_v:.1f} Gohm.m < 60)")
-                if col_v > 2.0: reclaim_reasons.append(f"Oil Colour degraded ({col_v:.1f} > 2.0)")
-                if sediment_sludge == "Sludge": reclaim_reasons.append("Precipitable Sludge detected")
-
-                if reclaim_reasons:
-                    rec_oa = "RECLAIMING"
-                    reason_str = " | ".join(reclaim_reasons)
+                reason_str = " | ".join(reclaim_reasons)
+            elif recond_reasons:
+                if any("Poor" in r for r in recond_reasons):
+                    rec_oa = "RECONDITIONING"
                 else:
-                    # Aksi 3: Reconditioning
-                    recond_reasons = []
-                    if 0 < bdv_v < 40: recond_reasons.append(f"Breakdown Voltage low ({bdv_v:.1f} kV < 40)")
-                    if water_v > 30: recond_reasons.append(f"Water Content high ({water_v:.1f} ppm > 30)")
-
-                    if recond_reasons:
-                        rec_oa = "RECONDITIONING"
-                        reason_str = " | ".join(recond_reasons)
-                    # Aksi 4: Normal
-                    else:
-                        rec_oa = "NORMAL"
-                        reason_str = "All parameters within normal limits."
+                    rec_oa = "NORMAL"
+                reason_str = " | ".join(recond_reasons)
+            else:
+                rec_oa = "NORMAL"
+                reason_str = "All oil physical & chemical parameters within normal limits."
 
         recommendation_oa_list.append(rec_oa)
         recommendation_oa_reason_list.append(reason_str)
 
-        # E. INTEGRASI REKOMENDASI OPERASIONAL TRAFO (DGA + OA) - HITUNG SETELAH rec_oa TERSEDIA
-        if status_dga_final in ['D1', 'D2']:
+        if data_state == 'Suspect':
+            rec_trafo = "WARNING: HIGH GASES DETECTED (SUSPECT DATA) - IMMEDIATE SAMPLING RETEST REQUIRED"
+        elif data_state == 'Outlier':
+            rec_trafo = "NORMAL OPERATIONAL CONDITION: OUTLIER DATA EXCLUDED - ROUTINE MONITORING"
+        elif status_dga_final in ['D1', 'D2']:
             rec_trafo = "CRITICAL: MANDATORY EMERGENCY SHUTDOWN & ELECTRICAL DIAGNOSTIC TEST"
         elif status_dga_final == 'T3':
             rec_trafo = "HIGH RISK: REDUCE LOAD (DERATING) & SCHEDULE EMERGENCY OUTAGE"
@@ -704,6 +863,8 @@ def calculate_prognosis_and_prediction(df_raw):
             rec_trafo = "WARNING: INCREASE DGA SAMPLING FREQUENCY (MONTHLY) & MONITOR LOAD"
         elif status_ieee == "Status 2":
             rec_trafo = "CAUTION: INCREASE DGA SAMPLING FREQUENCY (QUARTERLY)"
+        elif "Pending Trend Qualification" in status_dga_final:
+            rec_trafo = "CAUTION: ELEVATED GASES DETECTED - AWAITING TREND QUALIFICATION (REQ >=3 TESTS & >=4 MO SPAN)"
         else:
             rec_trafo = "NORMAL OPERATIONAL CONDITION: CONTINUE ROUTINE MONITORING"
         
@@ -716,7 +877,6 @@ def calculate_prognosis_and_prediction(df_raw):
     df_master['OA_Recommendation'] = recommendation_oa_list
     df_master['OA_Recommendation_Reason'] = recommendation_oa_reason_list
 
-    # 4. Prognosis Escalation Trajectory (6 Months)
     df_master['Prognosis_DGA'] = ""
     df_master['Severity_Level'] = df_master['Status_DGA'].apply(get_severity_score)
 
@@ -752,7 +912,7 @@ def calculate_prognosis_and_prediction(df_raw):
 
             df_master.loc[idx, 'Prognosis_DGA'] = conclusion
 
-    return df_master.drop(columns=['Tanggal_Uji_DT', 'Severity_Level', 'Vonis_AI_Mentah'], errors='ignore')
+    return df_master.drop(columns=['Tanggal_Uji_DT', 'Severity_Level', 'Vonis_AI_Mentah', 'Is_Purification_Event', 'Era_Pemurnian'], errors='ignore')
 
 ui.render_header("TRANSFORMER SUBSTATION MONITORING SYSTEM")
 
@@ -840,11 +1000,11 @@ with tab_input:
             col_c1, col_c2 = st.columns(2)
             if col_c1.button("Force Save Data", type="primary"):
                 p_data = st.session_state['pending_data']
-                p_data['Is_Anomali'] = 'Yes'
+                p_data['Is_Anomali'] = 'Suspect'
                 insert_data(p_data)
                 st.session_state['pending_data'] = None
                 st.session_state['anomaly_reason'] = None
-                st.success("Anomalous data forcibly committed to database.")
+                st.success("Anomalous data forcibly committed to database as Suspect.")
                 st.rerun()
 
             if col_c2.button("Cancel Operation"):
@@ -1000,10 +1160,8 @@ with tab_insights:
             fault_rows = df_insight_filtered[df_insight_filtered['Status_DGA'] != 'Normal']
             first_fault_text = f"{fault_rows.iloc[0]['Tanggal_Uji']} ({fault_rows.iloc[0]['Status_DGA']})" if not fault_rows.empty else "NONE DETECTED (Normal Status)"
 
-            # Tampilan Datasheet Utama
             ui.render_insights_datasheet(latest_record, disp_manuf, disp_cap, disp_age, first_fault_text)
 
-            # Tampilan Rekomendasi Operasional Trafo (DGA Action)
             st.markdown("---")
             st.markdown("### TRANSFORMER OPERATIONAL ACTION RECOMMENDATION (IEEE C57.104 & IEEE C57.152)")
             trafo_action = latest_record.get('Transformer_Action_Recommendation', 'NORMAL OPERATIONAL CONDITION: CONTINUE ROUTINE MONITORING')
@@ -1027,36 +1185,94 @@ with tab_trend:
         df_filtered = df_graph[df_graph['ID_Trafo'] == trafo_filter].sort_values('Tanggal_Uji').reset_index(drop=True)
 
         fig_gas = go.Figure()
-        gas_list, colors = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2'], ['#38BDF8', '#F59E0B', '#10B981', '#EF4444', '#A855F7']
-        df_hist_only = df_filtered[df_filtered['Tipe_Data'] == 'Historical']
-        last_hist_date = df_hist_only['Tanggal_Uji'].iloc[-1] if not df_hist_only.empty else None
+        gas_list = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2']
+        colors = ['#38BDF8', '#F59E0B', '#10B981', '#EF4444', '#A855F7']
+        
+        df_hist_full = df_filtered[df_filtered['Tipe_Data'] == 'Historical'].copy()
+        
+        # 1. DETEKSI TANGGAL OUTLIER MULTI-GAS
+        outlier_dates = set()
+        for i in range(1, len(df_hist_full) - 1):
+            row_prev = df_hist_full.iloc[i-1]
+            row_curr = df_hist_full.iloc[i]
+            row_next = df_hist_full.iloc[i+1]
+            
+            is_explicit = str(row_curr.get('Is_Anomali')).strip() in ['Outlier', 'Suspect', 'Yes']
+            
+            is_v_spike = False
+            for g in gas_list:
+                val_c = row_curr.get(g, 0) if pd.notna(row_curr.get(g)) else 0
+                val_p = row_prev.get(g, 0) if pd.notna(row_prev.get(g)) else 0
+                val_n = row_next.get(g, 0) if pd.notna(row_next.get(g)) else 0
+                if (val_c > 15.0) and (val_c > max(val_p, 1.0) * 2.5) and (val_n < val_c * 0.5):
+                    is_v_spike = True
+                    break
 
+            if is_explicit or is_v_spike:
+                outlier_dates.add(row_curr['Tanggal_Uji'])
+
+        # 2. PLOT GARIS TREN UTUH MENYAMBUNG SELURUH TITIK
         for idx_g, gas in enumerate(gas_list):
             if gas in df_filtered.columns:
-                fig_gas.add_trace(go.Scatter(x=df_filtered['Tanggal_Uji'], y=df_filtered[gas], mode='lines+markers', name=gas, line=dict(color=colors[idx_g], width=2)))
+                fig_gas.add_trace(go.Scatter(
+                    x=df_filtered['Tanggal_Uji'], 
+                    y=df_filtered[gas], 
+                    mode='lines+markers', 
+                    name=gas, 
+                    line=dict(color=colors[idx_g], width=2),
+                    marker=dict(size=6)
+                ))
 
+        # 3. PENANDA LINGKARAN MERAH UNTUK SETIAP TITIK GAS PADA TANGGAL OUTLIER
+        if outlier_dates:
+            df_outliers_found = df_filtered[df_filtered['Tanggal_Uji'].isin(outlier_dates)]
+            
+            for idx_row, row_out in df_outliers_found.iterrows():
+                out_date = row_out['Tanggal_Uji']
+                
+                for idx_g, gas in enumerate(gas_list):
+                    if gas in row_out and pd.notna(row_out[gas]):
+                        gas_val = float(row_out[gas])
+                        
+                        fig_gas.add_trace(go.Scatter(
+                            x=[out_date],
+                            y=[gas_val],
+                            mode='markers',
+                            name='Outlier Point' if (idx_row == df_outliers_found.index[0] and idx_g == 0) else None,
+                            showlegend=True if (idx_row == df_outliers_found.index[0] and idx_g == 0) else False,
+                            marker=dict(
+                                symbol='circle-open',
+                                size=16,
+                                color='#DC2626',
+                                line=dict(width=2.5, color='#DC2626')
+                            ),
+                            hovertemplate=f"<b>OUTLIER POINT ({gas})</b><br>Date: {out_date}<br>Value: {gas_val} ppm<extra></extra>"
+                        ))
+
+        last_hist_date = df_hist_full['Tanggal_Uji'].iloc[-1] if not df_hist_full.empty else None
         if last_hist_date:
             fig_gas.add_vline(x=last_hist_date, line_width=1.5, line_dash="dash", line_color="#D97706")
 
         fig_gas.update_layout(
-            title=dict(text=f"DGA GAS EVOLUTION & FORECAST - {trafo_filter}", font=dict(family="IBM Plex Mono", color="#0F172A", size=14)),
+            title=dict(text=f"DGA GAS EVOLUTION & FORECAST — {trafo_filter}", font=dict(family="IBM Plex Mono", color="#0F172A", size=14)),
             xaxis_title="TEST DATE", yaxis_title="CONCENTRATION (PPM)", template="plotly_white",
-            paper_bgcolor="#FFFFFF", plot_bgcolor="#F8FAFC", height=420, margin=dict(l=40, r=40, t=50, b=40)
+            paper_bgcolor="#FFFFFF", plot_bgcolor="#F8FAFC", height=450, margin=dict(l=40, r=40, t=50, b=40),
+            legend=dict(orientation="h", y=-0.2, x=0.0)
         )
 
         st.plotly_chart(fig_gas, use_container_width=True)
 
         ui.render_title("CURRENT DGA GAS CONCENTRATIONS (EXCLUDING O2/N2 RATIO)")
-        if not df_hist_only.empty:
-            ui.render_gas_ledger(df_hist_only.iloc[-1])
+        if not df_hist_full.empty:
+            ui.render_gas_ledger(df_hist_full.iloc[-1])
 
         ui.render_title("CURRENT EXTENDED OIL ANALYSIS (OA) CATEGORICAL STATUS LEDGER")
-        if not df_hist_only.empty:
-            ui.render_oa_ledger(df_hist_only.iloc[-1])
+        if not df_hist_full.empty:
+            ui.render_oa_ledger(df_hist_full.iloc[-1])
 
         ui.render_title("PHYSICAL & CHEMICAL OIL GAUGES (LAST OBSERVATION - CATEGORY C <72.5 kV)")
-        if not df_hist_only.empty:
-            last_oa = df_hist_only.iloc[-1]
+        if not df_hist_full.empty:
+            last_oa = df_hist_full.iloc[-1]
 
             g1, g2, g3, g4 = st.columns(4)
             g1.plotly_chart(create_hmi_gauge(float(last_oa.get('BDV', 0)) if pd.notna(last_oa.get('BDV')) else 0.0, "BDV (kV) [Min 40]", 0, 100, [{'range': [0, 30], 'color': "#DC2626"}, {'range': [30, 40], 'color': "#D97706"}, {'range': [40, 100], 'color': "#16A34A"}]), use_container_width=True)
@@ -1090,10 +1306,10 @@ with tab_duval:
             latest_d = df_d_filtered.iloc[-1]
             current_ieee_status = str(latest_d.get('DGA_Status_IEEE', '')).strip()
 
-            if current_ieee_status == "Status 1":
+            if "Status 1" in current_ieee_status:
                 st.info(f"**DUVAL TRIANGLE INACTIVE FOR {duval_trafo}**\n\n"
                         f"According to IEEE C57.104 standards, Duval Triangle analysis is only applicable when gas concentrations exceed normal operating thresholds.\n\n"
-                        f"- **Latest IEEE Status ({latest_d.get('Tanggal_Uji')}):** `{current_ieee_status}` (Normal Condition)\n"
+                        f"- **Latest IEEE Status ({latest_d.get('Tanggal_Uji')}):** `{current_ieee_status}`\n"
                         f"- **Physics Fault Verdict:** `{latest_d.get('Status_DGA')}`\n\n"
                         f"*The Duval Triangle plot will automatically render if the transformer condition escalates to Status 2 (Caution) or Status 3 (Fault).*")
             else:
