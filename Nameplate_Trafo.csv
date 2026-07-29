@@ -1,6 +1,1 @@
 ID_Trafo,Manufacturer,Serial_Number,Year_Manufactured,Model_Type,Capacity_MVA,Phase_Count,Nominal_Voltage_kV,Nominal_Current_A,Frequency_Hz,Vector_Group,Impedance_Pct
-Main_Transformer_01,ABB Power,SN-2010-001,2010,ONAN-TR1,30.0,3,150/20,115/866,50.0,YNd11,12.5
-Main_Transformer_02,Siemens Energy,SN-1990-002,1990,OFAF-TR2,60.0,3,150/70,230/494,50.0,YNd11,11.8
-Main_Transformer_03,GE Grid,SN-2012-003,2012,ONAN-TR3,25.0,3,70/20,206/721,50.0,YNd11,10.5
-Main_Transformer_04,Hitachi Energy,SN-1988-004,1988,OFAF-TR4,100.0,3,275/150,210/385,50.0,YNd11,14.0
-Main_Transformer_05,Schneider Electric,SN-2015-005,2015,ONAN-TR5,15.0,3,20/6.6,433/1312,50.0,Dyn11,8.2
