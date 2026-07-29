@@ -406,17 +406,39 @@ def plot_duval_triangle1(ch4, c2h4, c2h2, trafo_id):
     return fig, p_ch4, p_c2h4, p_c2h2
 
 def calculate_prognosis_and_prediction(df_raw):
-    if df_raw.empty: return pd.DataFrame()
+    """
+    Evaluates Transformer Health Index strictly using:
+    - IEEE C57.104-2019 (DGA Thresholds & Status)
+    - IEC 60599 (Duval Triangle 1 Fault Diagnosis)
+    - IEC 60422 Category C (Oil Analysis Parameters)
+    - IEEE C57.152-2013 (Field Operational Actions)
+    - ARIMA 6-Month Prognosis Model
+    """
+    if df_raw.empty: 
+        return pd.DataFrame()
+    
     df = df_raw.copy()
     df_meta = load_metadata()
 
+    # 1. Standardize Purification Status (Strictly 3 Actions + Normal)
     if 'Status_Pemurnian' not in df.columns:
         df['Status_Pemurnian'] = 'Normal'
+    
+    df['Status_Pemurnian'] = df['Status_Pemurnian'].fillna('Normal').astype(str).str.strip()
+    df['Status_Pemurnian'] = df['Status_Pemurnian'].replace({
+        'Ganti Oli': 'Oil Replacement', 
+        'None': 'Normal', 
+        '': 'Normal'
+    })
 
     df['Tanggal_Uji_DT'] = pd.to_datetime(df['Tanggal_Uji'], errors='coerce')
     df = df.sort_values(['ID_Trafo', 'Tanggal_Uji_DT']).reset_index(drop=True)
 
-    numeric_columns = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2', 'Ratio_O2_N2', 'BDV', 'Acid', 'Water', 'IFT', 'DDF', 'Resistivity', 'Colour_ISO2049', 'Inhibitor_Content', 'Passivator_Content', 'Flash_Point', 'PCB_Content']
+    numeric_columns = [
+        'H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2', 'Ratio_O2_N2', 
+        'BDV', 'Acid', 'Water', 'IFT', 'DDF', 'Resistivity', 'Colour_ISO2049', 
+        'Inhibitor_Content', 'Passivator_Content', 'Flash_Point', 'PCB_Content'
+    ]
     categorical_columns = ['Sediment_Sludge', 'Corrosive_Sulphur', 'Particles_ISO']
 
     for col in numeric_columns:
@@ -425,8 +447,7 @@ def calculate_prognosis_and_prediction(df_raw):
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
     gas_cols = ['H2', 'CH4', 'C2H6', 'C2H4', 'C2H2', 'CO', 'CO2']
-
-    is_purify_row = df['Status_Pemurnian'].fillna('').astype(str).str.strip().isin(['Oil Replacement', 'Reclaiming', 'Reconditioning'])
+    is_purify_row = df['Status_Pemurnian'].isin(['Oil Replacement', 'Reclaiming', 'Reconditioning'])
 
     for col in gas_cols:
         if col in df.columns:
@@ -450,6 +471,7 @@ def calculate_prognosis_and_prediction(df_raw):
     prediction_steps = 6
     final_results = []
 
+    # 2. ARIMA Time-Series Prognosis Engine
     for trafo in df['ID_Trafo'].unique():
         df_trafo = df[df['ID_Trafo'] == trafo].copy()
         df_trafo['Tipe_Data'] = 'Historical'
@@ -488,7 +510,7 @@ def calculate_prognosis_and_prediction(df_raw):
                 try:
                     model = ARIMA(time_series, order=(1, 1, 0))
                     forecast = model.fit().forecast(steps=prediction_steps)
-                except:
+                except Exception:
                     avg_diff = np.mean(np.diff(time_series[-3:])) if len(time_series) > 1 else 0
                     forecast = [time_series[-1] + (avg_diff * (i+1)) for i in range(prediction_steps)]
 
@@ -521,19 +543,22 @@ def calculate_prognosis_and_prediction(df_raw):
 
     dga_status_ieee_list, status_dga_final_list, status_paper_list = [], [], []
     recommendation_oa_list, recommendation_oa_reason_list = [], []
+    trafo_action_list = []
 
     df_master['Tanggal_Uji_DT'] = pd.to_datetime(df_master['Tanggal_Uji'], errors='coerce')
     df_master = df_master.sort_values(['ID_Trafo', 'Tanggal_Uji_DT']).reset_index(drop=True)
 
     trafo_freeze_status = {}
 
+    # 3. Diagnostic Execution Loop
     for idx, row in df_master.iterrows():
         trafo_id = row['ID_Trafo']
         meta_match = df_meta[df_meta['ID_Trafo'] == trafo_id]
         calculated_age = (row['Tanggal_Uji_DT'].year - meta_match.iloc[0]['Year_Manufactured']) if not meta_match.empty else None
 
         o2_n2_ratio = row.get('Ratio_O2_N2', 0.32)
-        if pd.isna(o2_n2_ratio): o2_n2_ratio = 0.32
+        if pd.isna(o2_n2_ratio): 
+            o2_n2_ratio = 0.32
 
         t1_limits, t2_limits, t3_delta_limits, t4_rate_limits = get_ieee_thresholds(o2_n2_ratio, calculated_age)
 
@@ -551,6 +576,7 @@ def calculate_prognosis_and_prediction(df_raw):
                         if (g == 'C2H2' and diff_ppm >= 0.5) or (g != 'C2H2' and diff_ppm > t3_delta_limits[g]) or (annual_rate > t4_rate_limits[g]):
                             is_rates_anomali = True
 
+        # A. Evaluasi IEEE C57.104 DGA Status & Duval Fault Mapping
         if not exceed_t1_any and not is_rates_anomali and not exceed_t2_any:
             status_ieee, status_dga_final = "Status 1", "Normal"
         elif exceed_t2_any or is_rates_anomali:
@@ -565,6 +591,7 @@ def calculate_prognosis_and_prediction(df_raw):
         dga_status_ieee_list.append(status_ieee)
         status_dga_final_list.append(status_dga_final)
 
+        # B. Status Degradasi Kertas Isolasi (CO / CO2 Ratio)
         co = row['CO'] if pd.notna(row['CO']) else 0.0
         co2 = row['CO2'] if pd.notna(row['CO2']) else 0.0
         ratio_co2_co = co2 / (co + 1e-5)
@@ -575,6 +602,7 @@ def calculate_prognosis_and_prediction(df_raw):
         else:
             status_paper_list.append("Normal")
 
+        # C. Freeze Mode Check
         status_p_str = str(row.get('Status_Pemurnian', '')).strip()
         if status_p_str in ['Oil Replacement', 'Reclaiming', 'Reconditioning']:
             trafo_freeze_status[trafo_id] = row['Tanggal_Uji_DT']
@@ -592,6 +620,7 @@ def calculate_prognosis_and_prediction(df_raw):
             if len(sub_df) < 6 or umb < 4:
                 is_currently_frozen = True
 
+        # D. Evaluasi Minyak (IEC 60422 Kategori C) - HITUNG TERLEBIH DAHULU
         bdv = float(row['BDV']) if pd.notna(row['BDV']) else None
         acid = float(row['Acid']) if pd.notna(row['Acid']) else None
         water = float(row['Water']) if pd.notna(row['Water']) else None
@@ -603,11 +632,11 @@ def calculate_prognosis_and_prediction(df_raw):
         corrosive_sulfur = str(row.get('Corrosive_Sulphur')).strip() if pd.notna(row.get('Corrosive_Sulphur')) else ""
 
         if is_currently_frozen:
-            rec_oa = "OA STATUS: FREEZE MODE ACTIVE (MONITORING NEW ERA)"
-            reason_str = "New oil baseline detected. System under intensive post-maintenance monitoring."
+            rec_oa = "FREEZE MODE ACTIVE"
+            reason_str = "New oil baseline detected under monitoring."
         elif all(v is None for v in [bdv, acid, water, ift]):
-            rec_oa = "OA STATUS: DATA NOT TESTED (N/A)"
-            reason_str = "Insufficient oil physical parameters recorded for Category C evaluation."
+            rec_oa = "DATA NOT TESTED"
+            reason_str = "Insufficient oil physical parameters recorded."
         else:
             bdv_v = bdv if bdv is not None else 0.0
             acid_v = acid if acid is not None else 0.0
@@ -618,50 +647,76 @@ def calculate_prognosis_and_prediction(df_raw):
             col_v = colour if colour is not None else 1.0
 
             reasons = []
-            if acid_v > 0.30: reasons.append(f"Acid Number critical ({acid_v:.2f} mgKOH/g > 0.30 Limit)")
-            if 0 < ift_v < 22: reasons.append(f"Interfacial Tension critical ({ift_v:.1f} mN/m < 22 Limit)")
-            if col_v >= 4.0: reasons.append(f"Colour Scale critical ({col_v:.1f} ISO 2049 >= 4.0 Limit)")
+            if acid_v > 0.30: reasons.append(f"Acid Number critical ({acid_v:.2f} mgKOH/g > 0.30)")
+            if 0 < ift_v < 22: reasons.append(f"Interfacial Tension critical ({ift_v:.1f} mN/m < 22)")
+            if col_v >= 4.0: reasons.append(f"Colour Scale critical ({col_v:.1f} >= 4.0)")
             if acid_v > 0.20 and ddf_v > 0.50 and 0 < res_v < 4: reasons.append("Severe Combined Aging Detected")
 
+            # Aksi 1: Oil Replacement (Ganti Oli)
             if reasons:
-                rec_oa = "OA RECOMMENDATION: MANDATORY TOTAL OIL REPLACEMENT (IEC 60422)"
-                reason_str = " | ".join(reasons) + " Full Oil Replacement Required."
+                rec_oa = "OIL REPLACEMENT"
+                reason_str = " | ".join(reasons)
+            # Aksi 2: Reclaiming
             elif corrosive_sulfur == "Corrosive":
-                rec_oa = "OA RECOMMENDATION: PASSIVATION OR RECLAIMING REQUIRED (IEC 60422)"
-                reason_str = "Corrosive Sulphur detected. Risk of copper sulfide deposition."
+                rec_oa = "RECLAIMING"
+                reason_str = "Corrosive Sulphur detected."
             else:
                 reclaim_reasons = []
-                if acid_v >= 0.15: reclaim_reasons.append(f"Acid elevated ({acid_v:.2f} mgKOH/g >= 0.15 Limit)")
+                if acid_v >= 0.15: reclaim_reasons.append(f"Acid elevated ({acid_v:.2f} mgKOH/g >= 0.15)")
                 if 22 <= ift_v <= 28: reclaim_reasons.append(f"IFT degraded ({ift_v:.1f} mN/m)")
-                if ddf_v > 0.10: reclaim_reasons.append(f"DDF/Tan Delta high ({ddf_v:.3f} > 0.10 Limit)")
-                if 0 < res_v < 60: reclaim_reasons.append(f"Resistivity low ({res_v:.1f} Gohm.m < 60 Limit)")
-                if col_v > 2.0: reclaim_reasons.append(f"Oil Colour degraded ({col_v:.1f} ISO 2049 > 2.0 Limit)")
+                if ddf_v > 0.10: reclaim_reasons.append(f"DDF high ({ddf_v:.3f} > 0.10)")
+                if 0 < res_v < 60: reclaim_reasons.append(f"Resistivity low ({res_v:.1f} Gohm.m < 60)")
+                if col_v > 2.0: reclaim_reasons.append(f"Oil Colour degraded ({col_v:.1f} > 2.0)")
                 if sediment_sludge == "Sludge": reclaim_reasons.append("Precipitable Sludge detected")
 
                 if reclaim_reasons:
-                    rec_oa = "OA RECOMMENDATION: OIL RECLAIMING REQUIRED (FULLER'S EARTH)"
-                    reason_str = " | ".join(reclaim_reasons) + " Fuller's Earth Adsorption needed."
+                    rec_oa = "RECLAIMING"
+                    reason_str = " | ".join(reclaim_reasons)
                 else:
+                    # Aksi 3: Reconditioning
                     recond_reasons = []
-                    if 0 < bdv_v < 40: recond_reasons.append(f"Breakdown Voltage low ({bdv_v:.1f} kV < 40 Limit)")
-                    if water_v > 30: recond_reasons.append(f"Water Content high ({water_v:.1f} ppm > 30 Limit)")
+                    if 0 < bdv_v < 40: recond_reasons.append(f"Breakdown Voltage low ({bdv_v:.1f} kV < 40)")
+                    if water_v > 30: recond_reasons.append(f"Water Content high ({water_v:.1f} ppm > 30)")
 
                     if recond_reasons:
-                        rec_oa = "OA RECOMMENDATION: OIL RECONDITIONING REQUIRED (FILTRATION)"
-                        reason_str = " | ".join(recond_reasons) + " Vacuum Dehydration & Filtration needed."
+                        rec_oa = "RECONDITIONING"
+                        reason_str = " | ".join(recond_reasons)
+                    # Aksi 4: Normal
                     else:
-                        rec_oa = "OA STATUS: NORMAL OPERATIONAL CONDITION (IEC 60422)"
-                        reason_str = "All active oil parameters within normal limits (Category C)."
+                        rec_oa = "NORMAL"
+                        reason_str = "All parameters within normal limits."
 
         recommendation_oa_list.append(rec_oa)
         recommendation_oa_reason_list.append(reason_str)
 
+        # E. INTEGRASI REKOMENDASI OPERASIONAL TRAFO (DGA + OA) - HITUNG SETELAH rec_oa TERSEDIA
+        if status_dga_final in ['D1', 'D2']:
+            rec_trafo = "CRITICAL: MANDATORY EMERGENCY SHUTDOWN & ELECTRICAL DIAGNOSTIC TEST"
+        elif status_dga_final == 'T3':
+            rec_trafo = "HIGH RISK: REDUCE LOAD (DERATING) & SCHEDULE EMERGENCY OUTAGE"
+        elif rec_oa == "OIL REPLACEMENT":
+            rec_trafo = "HIGH RISK: SCHEDULE MAINTENANCE OUTAGE FOR TOTAL OIL REPLACEMENT"
+        elif rec_oa == "RECLAIMING":
+            rec_trafo = "SCHEDULED MAINTENANCE REQUIRED: PLAN OIL RECLAIMING TREATMENT"
+        elif rec_oa == "RECONDITIONING":
+            rec_trafo = "SCHEDULED MAINTENANCE REQUIRED: PLAN OIL RECONDITIONING TREATMENT"
+        elif status_dga_final in ['T1', 'T2', 'DT', 'PD']:
+            rec_trafo = "WARNING: INCREASE DGA SAMPLING FREQUENCY (MONTHLY) & MONITOR LOAD"
+        elif status_ieee == "Status 2":
+            rec_trafo = "CAUTION: INCREASE DGA SAMPLING FREQUENCY (QUARTERLY)"
+        else:
+            rec_trafo = "NORMAL OPERATIONAL CONDITION: CONTINUE ROUTINE MONITORING"
+        
+        trafo_action_list.append(rec_trafo)
+
     df_master['DGA_Status_IEEE'] = dga_status_ieee_list
     df_master['Status_DGA'] = status_dga_final_list
     df_master['Paper_Status'] = status_paper_list
+    df_master['Transformer_Action_Recommendation'] = trafo_action_list
     df_master['OA_Recommendation'] = recommendation_oa_list
     df_master['OA_Recommendation_Reason'] = recommendation_oa_reason_list
 
+    # 4. Prognosis Escalation Trajectory (6 Months)
     df_master['Prognosis_DGA'] = ""
     df_master['Severity_Level'] = df_master['Status_DGA'].apply(get_severity_score)
 
@@ -945,7 +1000,22 @@ with tab_insights:
             fault_rows = df_insight_filtered[df_insight_filtered['Status_DGA'] != 'Normal']
             first_fault_text = f"{fault_rows.iloc[0]['Tanggal_Uji']} ({fault_rows.iloc[0]['Status_DGA']})" if not fault_rows.empty else "NONE DETECTED (Normal Status)"
 
+            # Tampilan Datasheet Utama
             ui.render_insights_datasheet(latest_record, disp_manuf, disp_cap, disp_age, first_fault_text)
+
+            # Tampilan Rekomendasi Operasional Trafo (DGA Action)
+            st.markdown("---")
+            st.markdown("### TRANSFORMER OPERATIONAL ACTION RECOMMENDATION (IEEE C57.104 & IEEE C57.152)")
+            trafo_action = latest_record.get('Transformer_Action_Recommendation', 'NORMAL OPERATIONAL CONDITION: CONTINUE ROUTINE MONITORING')
+
+            if "CRITICAL" in trafo_action:
+                st.error(f"**{trafo_action}**")
+            elif "HIGH RISK" in trafo_action or "WARNING" in trafo_action:
+                st.warning(f"**{trafo_action}**")
+            elif "CAUTION" in trafo_action:
+                st.info(f"**{trafo_action}**")
+            else:
+                st.success(f"**{trafo_action}**")
 
 with tab_trend:
     ui.render_title("HMI GAS DYNAMICS & INSTRUMENT GAUGES")
